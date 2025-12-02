@@ -1,0 +1,136 @@
+{
+  "name": "vscode-social-presence",
+  "displayName": "VS Code Social Presence",
+  "description": "See your friends' coding status in the sidebar.",
+  "version": "0.0.1",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Other"
+  ],
+  "activationEvents": [],
+  "main": "./out/extension.js",
+  "contributes": {
+    "commands": [
+      {
+        "command": "vscode-social-presence.helloWorld",
+        "title": "Hello World"
+      },
+      {
+        "command": "vscode-social-presence.refresh",
+        "title": "Refresh",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "vscode-social-presence.addFriend",
+        "title": "Add Friend",
+        "icon": "$(add)"
+      },
+      {
+        "command": "vscode-social-presence.removeFriend",
+        "title": "Remove Friend",
+        "icon": "$(trash)"
+      },
+      {
+        "command": "vscode-social-presence.copyUsername",
+        "title": "Copy My Username",
+        "icon": "$(clippy)"
+      },
+      {
+        "command": "vscode-social-presence.openSettings",
+        "title": "Social Presence Settings",
+        "icon": "$(gear)"
+      }
+    ],
+    "menus": {
+      "view/title": [
+        {
+          "command": "vscode-social-presence.refresh",
+          "group": "navigation"
+        },
+        {
+          "command": "vscode-social-presence.addFriend",
+          "group": "navigation"
+        },
+        {
+          "command": "vscode-social-presence.openSettings",
+          "group": "navigation"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "vscode-social-presence.removeFriend",
+          "group": "inline"
+        }
+      ]
+    },
+    "viewsContainers": {
+      "activitybar": [
+        {
+          "id": "social-presence-sidebar",
+          "title": "Social Presence",
+          "icon": "$(account)"
+        }
+      ]
+    },
+    "views": {
+      "social-presence-sidebar": [
+        {
+          "id": "social-presence-view",
+          "name": "Friends"
+        }
+      ]
+    },
+    "configuration": {
+      "title": "VS Code Social Presence",
+      "properties": {
+        "vscode-social-presence.username": {
+          "type": "string",
+          "default": "",
+          "description": "Your username for Social Presence."
+        },
+        "vscode-social-presence.shareProjectName": {
+          "type": "boolean",
+          "default": true,
+          "description": "Share the name of the current project."
+        },
+        "vscode-social-presence.shareLanguage": {
+          "type": "boolean",
+          "default": true,
+          "description": "Share the current programming language."
+        },
+        "vscode-social-presence.shareActivity": {
+          "type": "boolean",
+          "default": true,
+          "description": "Share your current activity (Coding, Debugging, Idle)."
+        }
+      }
+    }
+  },
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "pretest": "npm run compile && npm run lint",
+    "lint": "eslint src --ext ts",
+    "test": "node ./out/test/runTest.js"
+  },
+  "devDependencies": {
+    "@types/glob": "^8.1.0",
+    "@types/mocha": "^10.0.1",
+    "@types/node": "20.2.5",
+    "@types/vscode": "^1.106.1",
+    "@types/ws": "^8.18.1",
+    "@typescript-eslint/eslint-plugin": "^5.59.8",
+    "@typescript-eslint/parser": "^5.59.8",
+    "@vscode/test-electron": "^2.3.2",
+    "eslint": "^8.41.0",
+    "glob": "^8.1.0",
+    "mocha": "^10.2.0",
+    "typescript": "^5.1.3"
+  },
+  "dependencies": {
+    "ws": "^8.13.0"
+  }
+}

@@ -1,0 +1,25 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const wsClient_1 = require("../src/wsClient");
+const client1 = new wsClient_1.WsClient((users) => {
+    console.log('Client 1 received user list:', JSON.stringify(users, null, 2));
+});
+const client2 = new wsClient_1.WsClient((users) => {
+    console.log('Client 2 received user list:', JSON.stringify(users, null, 2));
+});
+console.log('Connecting clients...');
+client1.connect('TestUser1');
+client2.connect('TestUser2');
+setTimeout(() => {
+    console.log('Client 1 updating status...');
+    client1.updateStatus({
+        status: 'Coding',
+        activity: 'Debugging',
+        project: 'VS Code Social Presence',
+        language: 'TypeScript'
+    });
+}, 2000);
+setTimeout(() => {
+    console.log('Test finished.');
+    process.exit(0);
+}, 5000);
