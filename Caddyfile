@@ -1,0 +1,25 @@
+# Caddyfile for VS Code Social Presence
+# Uses environment variables for configuration
+
+{$SERVER_IP}:{$EXTERNAL_PORT} {
+    # Reverse proxy to the Node.js WebSocket server
+    # We assume the Node app runs on localhost at the internal PORT (default 8080)
+    reverse_proxy localhost:{$PORT}
+
+    # Security headers
+    header {
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
+        X-Content-Type-Options "nosniff"
+        X-Frame-Options "DENY"
+    }
+
+    # Logging
+    log {
+        output file /var/log/caddy/social-presence.log
+    }
+    
+    # Note: When using an IP address, Caddy will use its internal CA to issue a self-signed certificate.
+    # Clients (VS Code) may reject this unless "http.proxyStrictSSL": false is set, 
+    # or the root certificate is installed on the client machine.
+    # If you want to use standard HTTP (no SSL) to avoid this, use http://{$SERVER_IP}:{$EXTERNAL_PORT}
+}

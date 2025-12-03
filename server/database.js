@@ -207,8 +207,9 @@ class DatabaseService {
     }
     // Invite Codes
     createInviteCode(creatorUsername, expiresInHours = 48) {
-        // Generate unique code (6 chars: letters + numbers)
-        const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+        // Generate cryptographically secure code (6 chars)
+        const crypto = require('crypto');
+        const code = crypto.randomBytes(4).toString('hex').toUpperCase().substring(0, 6);
         const now = Date.now();
         const expiresAt = now + (expiresInHours * 60 * 60 * 1000);
         const stmt = db.prepare(`

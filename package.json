@@ -210,7 +210,12 @@
         "vscode-social-presence.showBadge": {
           "type": "boolean",
           "default": true,
-          "description": "Show online count badge on the Social Presence icon."
+          "description": "Show a badge count on the activity bar icon."
+        },
+        "vscode-social-presence.serverUrl": {
+          "type": "string",
+          "default": "ws://localhost:8080",
+          "description": "WebSocket server URL (e.g., wss://your-server.com)"
         }
       }
     }

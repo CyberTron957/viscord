@@ -6,7 +6,10 @@ import http from 'http';
 
 const PORT = parseInt(process.env.PORT || '8080');
 const server = http.createServer();
-const wss = new WebSocketServer({ server });
+const wss = new WebSocketServer({
+    server,
+    maxPayload: 16 * 1024 // 16KB limit per message
+});
 
 interface ClientData {
     sessionId: string;  // Unique per window

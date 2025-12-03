@@ -36,15 +36,18 @@ export class WsClient {
 
     private attemptConnection() {
         try {
-            this.ws = new WebSocket('ws://localhost:8080');
+            const vscode = require('vscode');
+            const config = vscode.workspace.getConfiguration('vscode-social-presence');
+            const serverUrl = config.get('serverUrl', 'ws://localhost:8080');
+
+            console.log(`Connecting to ${serverUrl}...`);
+            this.ws = new WebSocket(serverUrl);
 
             this.ws.on('open', () => {
                 console.log('Connected to WebSocket server');
                 this.reconnectAttempts = 0; // Reset on successful connection
 
                 // Get visibility mode from VS Code settings
-                const vscode = require('vscode');
-                const config = vscode.workspace.getConfiguration('vscode-social-presence');
                 const visibilityMode = config.get('visibilityMode', 'everyone');
 
                 this.send({

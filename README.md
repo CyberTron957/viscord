@@ -16,6 +16,17 @@ A VS Code extension that shows your GitHub friends' real-time coding status! See
 - **All Users**: Browse all active users
 - **Offline Users**: See when friends were last active (up to 7 days)
 
+## 🚀 Deployment
+
+For production deployment instructions, including setting up secure WebSockets (`wss://`) with Caddy, please see [DEPLOYMENT.md](DEPLOYMENT.md).
+
+## 🔒 Security
+
+This extension communicates with a central server to exchange status information.
+- **Privacy**: You can control who sees your status (Everyone, Followers, Following, Close Friends, or Invisible).
+- **Data**: Only your current status, activity, and project details are sent. No code is transmitted.
+- **Encryption**: Use `wss://` in production to ensure all data is encrypted in transit.
+
 ### 🪟 Multiple Windows Support
 - **Smart Aggregation**: Open multiple VS Code windows with different projects
 - **Activity Priority**: Shows your most active status (Debugging > Coding > Reading > Idle)
