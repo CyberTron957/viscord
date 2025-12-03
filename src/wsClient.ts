@@ -16,14 +16,15 @@ export class WsClient {
         this.onUserListUpdate = onUserListUpdate;
     }
 
-    connect(username: string) {
+    connect(username: string, token?: string) {
         this.ws = new WebSocket('ws://localhost:8080');
 
         this.ws.on('open', () => {
             console.log('Connected to WebSocket server');
             this.send({
                 type: 'login',
-                username: username
+                username: username,
+                token: token
             });
         });
 

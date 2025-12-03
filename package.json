@@ -23,14 +23,14 @@
         "icon": "$(refresh)"
       },
       {
-        "command": "vscode-social-presence.addFriend",
-        "title": "Add Friend",
-        "icon": "$(add)"
+        "command": "vscode-social-presence.pinCloseFriend",
+        "title": "Pin as Close Friend",
+        "icon": "$(pin)"
       },
       {
-        "command": "vscode-social-presence.removeFriend",
-        "title": "Remove Friend",
-        "icon": "$(trash)"
+        "command": "vscode-social-presence.unpinCloseFriend",
+        "title": "Unpin Close Friend",
+        "icon": "$(pinned)"
       },
       {
         "command": "vscode-social-presence.copyUsername",
@@ -41,26 +41,35 @@
         "command": "vscode-social-presence.openSettings",
         "title": "Social Presence Settings",
         "icon": "$(gear)"
+      },
+      {
+        "command": "vscode-social-presence.logout",
+        "title": "Logout",
+        "icon": "$(sign-out)"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "vscode-social-presence.refresh",
-          "group": "navigation"
-        },
-        {
-          "command": "vscode-social-presence.addFriend",
+          "when": "view == social-presence-view",
           "group": "navigation"
         },
         {
           "command": "vscode-social-presence.openSettings",
+          "when": "view == social-presence-view",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
-          "command": "vscode-social-presence.removeFriend",
+          "command": "vscode-social-presence.pinCloseFriend",
+          "when": "view == social-presence-view && viewItem == user",
+          "group": "inline"
+        },
+        {
+          "command": "vscode-social-presence.unpinCloseFriend",
+          "when": "view == social-presence-view && viewItem == user",
           "group": "inline"
         }
       ]
@@ -120,6 +129,7 @@
     "@types/glob": "^8.1.0",
     "@types/mocha": "^10.0.1",
     "@types/node": "20.2.5",
+    "@types/sqlite3": "^3.1.11",
     "@types/vscode": "^1.106.1",
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^5.59.8",
@@ -131,6 +141,8 @@
     "typescript": "^5.1.3"
   },
   "dependencies": {
+    "@octokit/rest": "^22.0.1",
+    "sqlite3": "^5.1.7",
     "ws": "^8.13.0"
   }
 }
