@@ -270,6 +270,22 @@ wss.on('connection', (ws, req) => {
                     }));
                 }
             }
+            else if (data.type === 'removeConnection') {
+                // Remove manual connection
+                if (clientData && data.username) {
+                    const resolvedClient = database_1.dbService.resolveUsername(clientData.username);
+                    const resolvedTarget = database_1.dbService.resolveUsername(data.username);
+                    database_1.dbService.removeManualConnection(resolvedClient, resolvedTarget);
+                    console.log(`Removed manual connection: ${resolvedClient} <-> ${resolvedTarget}`);
+                    ws.send(JSON.stringify({
+                        type: 'connectionRemoved',
+                        success: true,
+                        username: data.username
+                    }));
+                    // Broadcast update to refresh user lists
+                    broadcastUpdate();
+                }
+            }
         }
         catch (e) {
             console.error('Error parsing message', e);

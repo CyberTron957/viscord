@@ -61,6 +61,11 @@
         "command": "vscode-social-presence.acceptInvite",
         "title": "Accept Invite Code",
         "icon": "$(person-add)"
+      },
+      {
+        "command": "vscode-social-presence.removeConnection",
+        "title": "Remove Connection",
+        "icon": "$(trash)"
       }
     ],
     "menus": {
@@ -106,6 +111,11 @@
           "command": "vscode-social-presence.unpinCloseFriend",
           "when": "view == social-presence-view && viewItem == user",
           "group": "inline"
+        },
+        {
+          "command": "vscode-social-presence.removeConnection",
+          "when": "view == social-presence-view && viewItem == user",
+          "group": "manage"
         }
       ]
     },

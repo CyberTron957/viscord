@@ -236,6 +236,29 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // All commands are already registered, no need for disposable    });
 
+    // Remove Connection command (for manual connections)
+    vscode.commands.registerCommand('vscode-social-presence.removeConnection', async (item: any) => {
+        if (!item || !item.user) {
+            vscode.window.showErrorMessage('No user selected');
+            return;
+        }
+
+        const confirm = await vscode.window.showWarningMessage(
+            `Remove connection with ${item.user.username}?`,
+            'Yes, Remove',
+            'Cancel'
+        );
+
+        if (confirm === 'Yes, Remove') {
+            sidebarProvider.sendMessage({
+                type: 'removeConnection',
+                username: item.user.username
+            });
+
+            vscode.window.showInformationMessage(`Removed connection with ${item.user.username}`);
+        }
+    });
+
     // Reset command (for development/testing)
     vscode.commands.registerCommand('vscode-social-presence.reset', async () => {
         const confirm = await vscode.window.showWarningMessage(
