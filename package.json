@@ -134,6 +134,14 @@
           "id": "social-presence-view",
           "name": "Friends"
         }
+      ],
+      "explorer": [
+        {
+          "id": "social-presence-explorer",
+          "name": "Friends Online",
+          "icon": "$(account)",
+          "contextualTitle": "Social Presence"
+        }
       ]
     },
     "configuration": {
@@ -169,7 +177,22 @@
             "invisible"
           ],
           "default": "everyone",
-          "description": "Who can see your status: everyone, only followers, only following, only close friends, or invisible (no one)."
+          "description": "Control who can see your online status and activity."
+        },
+        "vscode-social-presence.showInStatusBar": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show online friends count in the status bar."
+        },
+        "vscode-social-presence.showInExplorer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show 'Friends Online' section in the Explorer sidebar."
+        },
+        "vscode-social-presence.showBadge": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show online count badge on the Social Presence icon."
         }
       }
     }

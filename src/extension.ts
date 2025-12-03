@@ -1,5 +1,6 @@
 import * as vscode from 'vscode';
 import { SidebarProvider } from './sidebarProvider';
+import { ExplorerPresenceProvider } from './explorerPresenceProvider';
 import { ActivityTracker } from './activityTracker';
 import { GitHubService } from './githubService';
 
@@ -106,7 +107,62 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarItem);
 
     const sidebarProvider = new SidebarProvider(context, profile, followers, following, githubService, isGitHubConnected);
-    vscode.window.registerTreeDataProvider('social-presence-view', sidebarProvider);
+
+    // Use createTreeView for badge support
+    const treeView = vscode.window.createTreeView('social-presence-view', {
+        treeDataProvider: sidebarProvider,
+        showCollapseAll: true
+    });
+    context.subscriptions.push(treeView);
+
+    // Create status bar item for online friends count
+    const onlineFriendsStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
+    onlineFriendsStatusBar.command = 'workbench.view.extension.social-presence-sidebar';
+    onlineFriendsStatusBar.tooltip = 'Click to view Social Presence';
+    context.subscriptions.push(onlineFriendsStatusBar);
+
+    // Register Explorer presence provider (shows online users in Explorer sidebar)
+    const config = vscode.workspace.getConfiguration('vscode-social-presence');
+    const explorerProvider = new ExplorerPresenceProvider();
+
+    if (config.get('showInExplorer', true)) {
+        vscode.window.registerTreeDataProvider('social-presence-explorer', explorerProvider);
+    }
+
+    // Sync explorer provider and status bar with sidebar updates
+    sidebarProvider.onUsersUpdated((users: any[]) => { // Assuming UserStatus[] is equivalent to any[] for this snippet
+        const onlineUsers = users.filter(u => u.status !== 'Offline');
+        const onlineCount = onlineUsers.length;
+
+        // Update explorer provider
+        explorerProvider.updateUsers(users);
+
+        // Update status bar if enabled
+        if (config.get('showInStatusBar', true)) {
+            if (onlineCount > 0) {
+                onlineFriendsStatusBar.text = `$(account) ${onlineCount} online`;
+                onlineFriendsStatusBar.show();
+            } else {
+                onlineFriendsStatusBar.hide();
+            }
+        } else {
+            onlineFriendsStatusBar.hide();
+        }
+
+        // Update badge on view if enabled
+        if (config.get('showBadge', true)) {
+            if (onlineCount > 0) {
+                treeView.badge = {
+                    tooltip: `${onlineCount} friend${onlineCount === 1 ? '' : 's'} online`,
+                    value: onlineCount
+                };
+            } else {
+                treeView.badge = undefined;
+            }
+        } else {
+            treeView.badge = undefined;
+        }
+    });
 
     const activityTracker = new ActivityTracker((status) => {
         if (sidebarProvider) {
@@ -119,15 +175,37 @@ export async function activate(context: vscode.ExtensionContext) {
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
         if (e.affectsConfiguration('vscode-social-presence')) {
             const config = vscode.workspace.getConfiguration('vscode-social-presence');
-            const visibilityMode = config.get<string>('visibilityMode', 'followers');
 
-            // Send updated preferences to server
-            sidebarProvider.sendMessage({
-                type: 'updatePreferences',
-                preferences: {
-                    visibility_mode: visibilityMode
+            // Handle visibility mode changes
+            if (e.affectsConfiguration('vscode-social-presence.visibilityMode')) {
+                const visibilityMode = config.get<string>('visibilityMode', 'followers');
+
+                // Send updated preferences to server
+                sidebarProvider.sendMessage({
+                    type: 'updatePreferences',
+                    preferences: {
+                        visibility_mode: visibilityMode
+                    }
+                });
+            }
+
+            // Handle UI visibility changes
+            if (e.affectsConfiguration('vscode-social-presence.showInStatusBar')) {
+                const showStatusBar = config.get('showInStatusBar', true);
+                if (!showStatusBar) {
+                    onlineFriendsStatusBar.hide();
                 }
-            });
+            }
+
+            if (e.affectsConfiguration('vscode-social-presence.showInExplorer') &&
+                !config.get('showInExplorer', true)) {
+                vscode.window.showInformationMessage('Explorer view setting will take effect after reload');
+            }
+
+            if (e.affectsConfiguration('vscode-social-presence.showBadge') &&
+                !config.get('showBadge', true)) {
+                treeView.badge = undefined;
+            }
 
             vscode.window.showInformationMessage('Social Presence settings updated');
         }

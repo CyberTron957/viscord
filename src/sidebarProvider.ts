@@ -6,10 +6,13 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> = new vscode.EventEmitter<TreeNode | undefined | null | void>();
     readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | null | void> = this._onDidChangeTreeData.event;
 
-    private allUsers: UserStatus[] = [];
-    private wsClient: WsClient;
+    private _onUsersUpdated: vscode.EventEmitter<UserStatus[]> = new vscode.EventEmitter<UserStatus[]>();
+    readonly onUsersUpdated: vscode.Event<UserStatus[]> = this._onUsersUpdated.event;
+
     private context: vscode.ExtensionContext;
     private profile: GitHubUser;
+    private allUsers: UserStatus[] = [];
+    private wsClient: WsClient;
     private followers: GitHubUser[];
     private following: GitHubUser[];
     private githubService: GitHubService;
@@ -34,6 +37,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
 
         this.wsClient = new WsClient((users) => {
             this.allUsers = users;
+            this._onUsersUpdated.fire(users);
             this.refresh();
         });
 
