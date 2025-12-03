@@ -66,55 +66,55 @@
         "command": "vscode-social-presence.removeConnection",
         "title": "Remove Connection",
         "icon": "$(trash)"
+      },
+      {
+        "command": "vscode-social-presence.continueAsGuest",
+        "title": "Continue as Guest",
+        "icon": "$(account)"
       }
     ],
     "menus": {
       "view/title": [
         {
           "command": "vscode-social-presence.refresh",
-          "when": "view == social-presence-view",
+          "when": "view == social-presence-friends || view == social-presence-github",
           "group": "navigation"
         },
         {
           "command": "vscode-social-presence.openSettings",
-          "when": "view == social-presence-view",
+          "when": "view == social-presence-friends",
           "group": "navigation"
         },
         {
           "command": "vscode-social-presence.createInvite",
-          "when": "view == social-presence-view",
+          "when": "view == social-presence-friends",
           "group": "navigation"
         },
         {
           "command": "vscode-social-presence.acceptInvite",
-          "when": "view == social-presence-view",
-          "group": "navigation"
-        },
-        {
-          "command": "vscode-social-presence.connectGitHub",
-          "when": "view == social-presence-view && !vscode-social-presence:githubConnected",
+          "when": "view == social-presence-friends",
           "group": "navigation"
         },
         {
           "command": "vscode-social-presence.logout",
-          "when": "view == social-presence-view && vscode-social-presence:githubConnected",
+          "when": "view == social-presence-github && vscode-social-presence:githubConnected",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
           "command": "vscode-social-presence.pinCloseFriend",
-          "when": "view == social-presence-view && viewItem == user",
+          "when": "view == social-presence-github && viewItem == user",
           "group": "inline"
         },
         {
           "command": "vscode-social-presence.unpinCloseFriend",
-          "when": "view == social-presence-view && viewItem == user",
+          "when": "view == social-presence-friends && viewItem == user",
           "group": "inline"
         },
         {
           "command": "vscode-social-presence.removeConnection",
-          "when": "view == social-presence-view && viewItem == user",
+          "when": "view == social-presence-friends && viewItem == user",
           "group": "manage"
         }
       ]
@@ -131,8 +131,12 @@
     "views": {
       "social-presence-sidebar": [
         {
-          "id": "social-presence-view",
-          "name": "Friends"
+          "id": "social-presence-friends",
+          "name": "Close Friends & Guests"
+        },
+        {
+          "id": "social-presence-github",
+          "name": "GitHub Network"
         }
       ],
       "explorer": [
@@ -144,6 +148,18 @@
         }
       ]
     },
+    "viewsWelcome": [
+      {
+        "view": "social-presence-friends",
+        "contents": "Welcome to Social Presence!\nConnect with GitHub to see your network, or continue as a guest to use invite codes.\n[Connect GitHub](command:vscode-social-presence.connectGitHub)\n[Continue as Guest](command:vscode-social-presence.continueAsGuest)",
+        "when": "!vscode-social-presence:authenticated"
+      },
+      {
+        "view": "social-presence-github",
+        "contents": "Connect to GitHub to see your followers and following online.\n[Connect GitHub](command:vscode-social-presence.connectGitHub)",
+        "when": "!vscode-social-presence:githubConnected"
+      }
+    ],
     "configuration": {
       "title": "VS Code Social Presence",
       "properties": {

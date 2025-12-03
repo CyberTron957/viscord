@@ -71,6 +71,23 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         return element;
     }
 
+    // Public getters for GitHubViewProvider
+    public getFollowersList(): GitHubUser[] {
+        return this.followers;
+    }
+
+    public getFollowingList(): GitHubUser[] {
+        return this.following;
+    }
+
+    public getAllUsers(): UserStatus[] {
+        return this.allUsers;
+    }
+
+    public getProfile(): GitHubUser {
+        return this.profile;
+    }
+
     getChildren(element?: TreeNode): Thenable<TreeNode[]> {
         if (element) {
             // Return children of a category
@@ -85,16 +102,10 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     private getCategories(): Category[] {
-        const followingCount = this.getFollowingUsers().length;
-        const followersCount = this.getFollowersUsers().length;
-        const allUsersCount = this.allUsers.filter(u => u.username !== this.profile.login).length;
         const closeFriendsCount = this.getCloseFriendsUsers().length;
-
+        // In the main view, we show Close Friends and Manual Connections (Guests)
         return [
-            new Category('Close Friends', vscode.TreeItemCollapsibleState.Expanded, closeFriendsCount),
-            new Category('Following', vscode.TreeItemCollapsibleState.Collapsed, followingCount),
-            new Category('Followers', vscode.TreeItemCollapsibleState.Collapsed, followersCount),
-            new Category('All Users', vscode.TreeItemCollapsibleState.Collapsed, allUsersCount),
+            new Category('Close Friends', vscode.TreeItemCollapsibleState.Expanded, closeFriendsCount)
         ];
     }
 
@@ -211,9 +222,80 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         // Reconnect WebSocket without token (manual connections preserved)
         this.wsClient.disconnect();
         this.wsClient.connect(guestUsername, undefined);
-
         // Refresh sidebar
         this.refresh();
+    }
+}
+
+export class GitHubViewProvider implements vscode.TreeDataProvider<TreeNode> {
+    private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> = new vscode.EventEmitter<TreeNode | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | null | void> = this._onDidChangeTreeData.event;
+
+    constructor(private sidebarProvider: SidebarProvider) {
+        // Listen for updates from the main provider
+        sidebarProvider.onUsersUpdated(() => {
+            this.refresh();
+        });
+    }
+
+    refresh(): void {
+        this._onDidChangeTreeData.fire();
+    }
+
+    getTreeItem(element: TreeNode): vscode.TreeItem {
+        return element;
+    }
+
+    getChildren(element?: TreeNode): Thenable<TreeNode[]> {
+        if (element) {
+            if (element instanceof Category) {
+                return Promise.resolve(this.getUsersForCategory(element.label));
+            }
+            return Promise.resolve([]);
+        }
+
+        // Root: Categories
+        return Promise.resolve(this.getCategories());
+    }
+
+    private getCategories(): Category[] {
+        const followingCount = this.getFollowingUsers().length;
+        const followersCount = this.getFollowersUsers().length;
+        const allUsersCount = this.sidebarProvider.getAllUsers().filter(u => u.username !== this.sidebarProvider.getProfile().login).length;
+
+        return [
+            new Category('Following', vscode.TreeItemCollapsibleState.Collapsed, followingCount),
+            new Category('Followers', vscode.TreeItemCollapsibleState.Collapsed, followersCount),
+            new Category('All Users', vscode.TreeItemCollapsibleState.Collapsed, allUsersCount),
+        ];
+    }
+
+    private getUsersForCategory(category: string): UserNode[] {
+        let users: UserStatus[] = [];
+
+        switch (category) {
+            case 'Following':
+                users = this.getFollowingUsers();
+                break;
+            case 'Followers':
+                users = this.getFollowersUsers();
+                break;
+            case 'All Users':
+                users = this.sidebarProvider.getAllUsers().filter(u => u.username !== this.sidebarProvider.getProfile().login);
+                break;
+        }
+
+        return users.map(u => new UserNode(u, vscode.TreeItemCollapsibleState.None));
+    }
+
+    private getFollowingUsers(): UserStatus[] {
+        const followingLogins = this.sidebarProvider.getFollowingList().map(f => f.login.toLowerCase());
+        return this.sidebarProvider.getAllUsers().filter(u => followingLogins.includes(u.username.toLowerCase()));
+    }
+
+    private getFollowersUsers(): UserStatus[] {
+        const followerLogins = this.sidebarProvider.getFollowersList().map(f => f.login.toLowerCase());
+        return this.sidebarProvider.getAllUsers().filter(u => followerLogins.includes(u.username.toLowerCase()));
     }
 }
 
