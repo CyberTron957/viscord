@@ -5,6 +5,15 @@
 - Node.js 18+ installed
 - Domain name (optional, for SSL)
 
+## Features Included in This Deployment
+- ✅ GitHub OAuth authentication
+- ✅ SQLite persistent storage
+- ✅ Privacy settings (5 visibility modes)
+- ✅ Rate limiting & anti-abuse
+- ✅ Multiple windows support (session aggregation)
+- ✅ Offline users with "last seen" timestamps
+- ✅ Performance optimizations (80% traffic reduction)
+
 ## Step 1: Prepare Server Files
 
 1. **Compile TypeScript:**

@@ -19,9 +19,12 @@ export class WsClient {
     private reconnectTimeout: NodeJS.Timeout | null = null;
     private isIntentionallyClosed = false;
     private lastSentStatus: string = ''; // Track last sent status to avoid duplicates
+    private sessionId: string; // Unique ID for this VS Code window
 
     constructor(onUserListUpdate: (users: UserStatus[]) => void) {
         this.onUserListUpdate = onUserListUpdate;
+        // Generate unique session ID for this window
+        this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
     connect(username: string, token?: string) {
@@ -39,10 +42,17 @@ export class WsClient {
                 console.log('Connected to WebSocket server');
                 this.reconnectAttempts = 0; // Reset on successful connection
 
+                // Get visibility mode from VS Code settings
+                const vscode = require('vscode');
+                const config = vscode.workspace.getConfiguration('vscode-social-presence');
+                const visibilityMode = config.get('visibilityMode', 'everyone');
+
                 this.send({
                     type: 'login',
                     username: this.username,
-                    token: this.token
+                    token: this.token,
+                    visibilityMode: visibilityMode,
+                    sessionId: this.sessionId
                 });
             });
 

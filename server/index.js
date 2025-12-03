@@ -123,8 +123,16 @@ wss.on('connection', (ws, req) => {
                         ];
                         database_1.dbService.upsertRelationships(githubUser.id, relationships);
                         // Get user preferences
-                        const preferences = database_1.dbService.getUserPreferences(githubUser.id);
+                        let preferences = database_1.dbService.getUserPreferences(githubUser.id);
+                        // Sync visibility mode from client if provided
+                        if (data.visibilityMode) {
+                            database_1.dbService.updateUserPreferences(githubUser.id, {
+                                visibility_mode: data.visibilityMode
+                            });
+                            preferences = database_1.dbService.getUserPreferences(githubUser.id);
+                        }
                         newClientData = {
+                            sessionId: data.sessionId || `session_${Date.now()}_${Math.random()}`,
                             githubId: githubUser.id,
                             username: githubUser.login,
                             avatar: githubUser.avatar_url,
@@ -159,6 +167,7 @@ wss.on('connection', (ws, req) => {
                     }
                     else {
                         newClientData = {
+                            sessionId: data.sessionId || `session_${Date.now()}_${Math.random()}`,
                             username: data.username,
                             followers: [],
                             following: [],
@@ -171,6 +180,7 @@ wss.on('connection', (ws, req) => {
                 }
                 else {
                     newClientData = {
+                        sessionId: data.sessionId || `session_${Date.now()}_${Math.random()}`,
                         username: data.username,
                         followers: [],
                         following: [],
@@ -220,13 +230,39 @@ wss.on('connection', (ws, req) => {
     });
 });
 function broadcastUpdate() {
+    // First, aggregate all sessions per user (handle multiple windows)
+    const userSessions = new Map();
+    for (const clientData of clients.values()) {
+        const sessions = userSessions.get(clientData.username) || [];
+        sessions.push(clientData);
+        userSessions.set(clientData.username, sessions);
+    }
+    // Create aggregated user data (most active status wins)
+    const aggregatedUsers = new Map();
+    for (const [username, sessions] of userSessions.entries()) {
+        // Pick the most "active" session
+        const mostActive = sessions.reduce((prev, curr) => {
+            // Priority: Debugging > Coding > Reading > Idle
+            const activityPriority = {
+                'Debugging': 4,
+                'Coding': 3,
+                'Reading': 2,
+                'Idle': 1,
+                'Hidden': 0
+            };
+            const prevPriority = activityPriority[prev.activity] || 0;
+            const currPriority = activityPriority[curr.activity] || 0;
+            return currPriority > prevPriority ? curr : prev;
+        });
+        aggregatedUsers.set(username, mostActive);
+    }
     for (const [receiverWs, receiverData] of clients.entries()) {
         if (receiverWs.readyState !== ws_1.WebSocket.OPEN) {
             continue;
         }
         // Build user list visible to this receiver
         const visibleUsers = [];
-        for (const clientData of clients.values()) {
+        for (const clientData of aggregatedUsers.values()) {
             // Don't include self
             if (clientData.username === receiverData.username) {
                 continue;
@@ -236,29 +272,37 @@ function broadcastUpdate() {
                 visibleUsers.push(filterUserData(clientData));
             }
         }
-        // Also include recently offline users from database
-        if (receiverData.githubId) {
-            const closeFriends = database_1.dbService.getCloseFriends(receiverData.githubId);
-            const followers = database_1.dbService.getFollowers(receiverData.githubId);
-            const following = database_1.dbService.getFollowing(receiverData.githubId);
-            // Get offline users who are followers/following or close friends
-            const relevantUserIds = [...new Set([...closeFriends, ...followers, ...following])];
-            for (const userId of relevantUserIds) {
-                const user = database_1.dbService.getUser(userId);
-                if (user && !clients.has(receiverWs)) { // Only if not already online
-                    const now = Date.now();
-                    const timeSinceLastSeen = now - user.last_seen;
-                    // Show offline users who were seen in the last 7 days
-                    if (timeSinceLastSeen < 7 * 24 * 60 * 60 * 1000) {
-                        visibleUsers.push({
-                            username: user.username,
-                            avatar: user.avatar,
-                            status: 'Offline',
-                            activity: 'Offline',
-                            project: '',
-                            language: '',
-                            lastSeen: user.last_seen
-                        });
+        // Include recently disconnected users (offline with last seen)
+        for (const [username, userData] of Object.entries(Array.from(clients.values()).reduce((acc, c) => {
+            acc[c.username] = c;
+            return acc;
+        }, {}))) {
+            // Skip if already in visible users
+            if (visibleUsers.some(u => u.username === username)) {
+                continue;
+            }
+            // Check if this offline user should be visible to receiver
+            if (receiverData.githubId && userData.githubId) {
+                const isFollower = receiverData.followers.includes(userData.githubId);
+                const isFollowing = receiverData.following.includes(userData.githubId);
+                const isCloseFriend = database_1.dbService.getCloseFriends(receiverData.githubId).includes(userData.githubId);
+                if (isFollower || isFollowing || isCloseFriend) {
+                    // Get from database for last seen
+                    const dbUser = database_1.dbService.getUser(userData.githubId);
+                    if (dbUser) {
+                        const timeSinceLastSeen = Date.now() - dbUser.last_seen;
+                        // Show if seen in last 7 days
+                        if (timeSinceLastSeen < 7 * 24 * 60 * 60 * 1000) {
+                            visibleUsers.push({
+                                username: dbUser.username,
+                                avatar: dbUser.avatar,
+                                status: 'Offline',
+                                activity: 'Offline',
+                                project: '',
+                                language: '',
+                                lastSeen: dbUser.last_seen
+                            });
+                        }
                     }
                 }
             }
