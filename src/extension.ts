@@ -80,4 +80,6 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(disposable);
 }
 
-export function deactivate() { }
+export function deactivate() {
+    // Cleanup will happen automatically via context.subscriptions
+}

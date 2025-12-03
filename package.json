@@ -113,6 +113,18 @@
           "type": "boolean",
           "default": true,
           "description": "Share your current activity (Coding, Debugging, Idle)."
+        },
+        "vscode-social-presence.visibilityMode": {
+          "type": "string",
+          "enum": [
+            "everyone",
+            "followers",
+            "following",
+            "close-friends",
+            "invisible"
+          ],
+          "default": "everyone",
+          "description": "Who can see your status: everyone, only followers, only following, only close friends, or invisible (no one)."
         }
       }
     }
@@ -126,7 +138,9 @@
     "test": "node ./out/test/runTest.js"
   },
   "devDependencies": {
+    "@types/better-sqlite3": "^7.6.13",
     "@types/glob": "^8.1.0",
+    "@types/jest": "^30.0.0",
     "@types/mocha": "^10.0.1",
     "@types/node": "20.2.5",
     "@types/sqlite3": "^3.1.11",
@@ -137,11 +151,14 @@
     "@vscode/test-electron": "^2.3.2",
     "eslint": "^8.41.0",
     "glob": "^8.1.0",
+    "jest": "^30.2.0",
     "mocha": "^10.2.0",
+    "ts-jest": "^29.4.6",
     "typescript": "^5.1.3"
   },
   "dependencies": {
     "@octokit/rest": "^22.0.1",
+    "better-sqlite3": "^12.5.0",
     "sqlite3": "^5.1.7",
     "ws": "^8.13.0"
   }

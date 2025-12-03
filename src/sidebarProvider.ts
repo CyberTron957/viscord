@@ -151,11 +151,38 @@ class UserNode extends vscode.TreeItem {
         public readonly collapsibleState: vscode.TreeItemCollapsibleState
     ) {
         super(user.username, collapsibleState);
+
+        // Format description with last seen if offline
+        let description = `${user.status} - ${user.activity}`;
+        if (user.status === 'Offline' && user.lastSeen) {
+            const lastSeenTime = this.formatLastSeen(user.lastSeen);
+            description = `Offline - Last seen ${lastSeenTime}`;
+        }
+
         this.tooltip = `${user.username} - ${user.status}\nProject: ${user.project}\nLanguage: ${user.language}`;
-        this.description = `${user.status} - ${user.activity}`;
+        this.description = description;
         this.contextValue = 'user';
 
         this.setIcon(user.status);
+    }
+
+    private formatLastSeen(timestamp: number): string {
+        const now = Date.now();
+        const diff = now - timestamp;
+
+        const minutes = Math.floor(diff / 60000);
+        const hours = Math.floor(diff / 3600000);
+        const days = Math.floor(diff / 86400000);
+
+        if (minutes < 1) {
+            return 'just now';
+        } else if (minutes < 60) {
+            return `${minutes}m ago`;
+        } else if (hours < 24) {
+            return `${hours}h ago`;
+        } else {
+            return `${days}d ago`;
+        }
     }
 
     private setIcon(status: string) {
