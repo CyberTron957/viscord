@@ -167,6 +167,7 @@
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",
+    "compile:server": "tsc server/*.ts --outDir server --module commonjs --target es6 --esModuleInterop --skipLibCheck",
     "watch": "tsc -watch -p ./",
     "pretest": "npm run compile && npm run lint",
     "lint": "eslint src --ext ts",

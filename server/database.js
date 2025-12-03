@@ -61,10 +61,19 @@ db.exec(`
     PRIMARY KEY (user1_username, user2_username)
   );
 
+  CREATE TABLE IF NOT EXISTS username_aliases (
+    github_username TEXT PRIMARY KEY,
+    guest_username TEXT NOT NULL,
+    github_id INTEGER NOT NULL,
+    created_at INTEGER NOT NULL,
+    UNIQUE(guest_username)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_user_relationships ON user_relationships(user_github_id, relationship_type);
   CREATE INDEX IF NOT EXISTS idx_close_friends ON close_friends(user_github_id);
   CREATE INDEX IF NOT EXISTS idx_invite_codes_creator ON invite_codes(creator_username);
   CREATE INDEX IF NOT EXISTS idx_manual_connections ON manual_connections(user1_username);
+  CREATE INDEX IF NOT EXISTS idx_username_aliases_guest ON username_aliases(guest_username);
 `);
 class DatabaseService {
     // User operations
@@ -87,6 +96,10 @@ class DatabaseService {
     getUser(githubId) {
         const stmt = db.prepare('SELECT * FROM users WHERE github_id = ?');
         return stmt.get(githubId);
+    }
+    getAllUsers() {
+        const stmt = db.prepare('SELECT * FROM users ORDER BY last_seen DESC');
+        return stmt.all();
     }
     getUserByUsername(username) {
         const stmt = db.prepare('SELECT * FROM users WHERE username = ?');
@@ -255,6 +268,36 @@ class DatabaseService {
     isManuallyConnected(user1, user2) {
         const stmt = db.prepare('SELECT 1 FROM manual_connections WHERE user1_username = ? AND user2_username = ?');
         return !!stmt.get(user1, user2);
+    }
+    // Username Aliases (Guest -> GitHub mapping)
+    createAlias(githubUsername, guestUsername, githubId) {
+        const stmt = db.prepare(`
+            INSERT INTO username_aliases (github_username, guest_username, github_id, created_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(github_username) DO UPDATE SET
+                guest_username = excluded.guest_username,
+                github_id = excluded.github_id
+        `);
+        stmt.run(githubUsername, guestUsername, githubId, Date.now());
+    }
+    getGitHubUsername(guestUsername) {
+        const stmt = db.prepare('SELECT github_username FROM username_aliases WHERE guest_username = ?');
+        const result = stmt.get(guestUsername);
+        return (result === null || result === void 0 ? void 0 : result.github_username) || null;
+    }
+    getGuestUsername(githubUsername) {
+        const stmt = db.prepare('SELECT guest_username FROM username_aliases WHERE github_username = ?');
+        const result = stmt.get(githubUsername);
+        return (result === null || result === void 0 ? void 0 : result.guest_username) || null;
+    }
+    // Resolve username - returns GitHub username if alias exists, otherwise returns input
+    resolveUsername(username) {
+        // First check if this is a guest username with an alias
+        const githubUsername = this.getGitHubUsername(username);
+        if (githubUsername) {
+            return githubUsername;
+        }
+        return username;
     }
     close() {
         db.close();

@@ -109,9 +109,30 @@ export async function activate(context: vscode.ExtensionContext) {
     vscode.window.registerTreeDataProvider('social-presence-view', sidebarProvider);
 
     const activityTracker = new ActivityTracker((status) => {
-        sidebarProvider.updateStatus(status);
+        if (sidebarProvider) {
+            sidebarProvider.updateStatus(status);
+        }
     });
     context.subscriptions.push({ dispose: () => activityTracker.dispose() });
+
+    // Watch for configuration changes and apply them in real-time
+    const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
+        if (e.affectsConfiguration('vscode-social-presence')) {
+            const config = vscode.workspace.getConfiguration('vscode-social-presence');
+            const visibilityMode = config.get<string>('visibilityMode', 'followers');
+
+            // Send updated preferences to server
+            sidebarProvider.sendMessage({
+                type: 'updatePreferences',
+                preferences: {
+                    visibility_mode: visibilityMode
+                }
+            });
+
+            vscode.window.showInformationMessage('Social Presence settings updated');
+        }
+    });
+    context.subscriptions.push(configWatcher);
 
     // Connect GitHub command (only visible when not connected)
     vscode.commands.registerCommand('vscode-social-presence.connectGitHub', async () => {
@@ -123,6 +144,9 @@ export async function activate(context: vscode.ExtensionContext) {
             const newFollowers = await githubService.getFollowers();
             const newFollowing = await githubService.getFollowing();
 
+            // Get current guest username if any
+            const guestUsername = context.globalState.get<string>('guestUsername');
+
             // Update state
             await context.globalState.update('authState', 'github');
             vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', true);
@@ -130,10 +154,10 @@ export async function activate(context: vscode.ExtensionContext) {
             // Update status bar
             statusBarItem.text = `$(account) ${newProfile.login}`;
 
-            // Reconnect sidebar with GitHub data
-            sidebarProvider.connectGitHub(newProfile, newFollowers, newFollowing);
+            // Reconnect sidebar with GitHub data (and create alias)
+            sidebarProvider.connectGitHub(newProfile, newFollowers, newFollowing, guestUsername);
 
-            vscode.window.showInformationMessage(`Connected to GitHub as ${newProfile.login}`);
+            vscode.window.showInformationMessage(`Connected to GitHub as ${newProfile.login}${guestUsername ? ` (was ${guestUsername})` : ''}`);
         } catch (error) {
             vscode.window.showErrorMessage('Failed to connect to GitHub');
             console.error('GitHub connection failed:', error);
@@ -210,7 +234,24 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    // All commands are already registered, no need for disposable
+    // All commands are already registered, no need for disposable    });
+
+    // Reset command (for development/testing)
+    vscode.commands.registerCommand('vscode-social-presence.reset', async () => {
+        const confirm = await vscode.window.showWarningMessage(
+            'This will clear all local data (auth state, guest username, close friends). Continue?',
+            'Yes, Reset',
+            'Cancel'
+        );
+
+        if (confirm === 'Yes, Reset') {
+            await context.globalState.update('authState', undefined);
+            await context.globalState.update('guestUsername', undefined);
+            await context.globalState.update('closeFriends', undefined);
+
+            vscode.window.showInformationMessage('All local data cleared. Please reload window (Cmd+R).');
+        }
+    });
 }
 
 export function deactivate() {

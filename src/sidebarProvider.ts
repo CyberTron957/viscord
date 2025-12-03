@@ -116,17 +116,18 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     private getFollowingUsers(): UserStatus[] {
-        const followingLogins = this.following.map(f => f.login);
-        return this.allUsers.filter(u => followingLogins.includes(u.username));
+        const followingLogins = this.following.map(f => f.login.toLowerCase());
+        return this.allUsers.filter(u => followingLogins.includes(u.username.toLowerCase()));
     }
 
     private getFollowersUsers(): UserStatus[] {
-        const followerLogins = this.followers.map(f => f.login);
-        return this.allUsers.filter(u => followerLogins.includes(u.username));
+        const followerLogins = this.followers.map(f => f.login.toLowerCase());
+        return this.allUsers.filter(u => followerLogins.includes(u.username.toLowerCase()));
     }
 
     private getCloseFriendsUsers(): UserStatus[] {
-        return this.allUsers.filter(u => this.closeFriends.includes(u.username));
+        const closeFriendsLower = this.closeFriends.map(f => f.toLowerCase());
+        return this.allUsers.filter(u => closeFriendsLower.includes(u.username.toLowerCase()));
     }
 
     public updateStatus(status: Partial<UserStatus>) {
@@ -163,17 +164,27 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         this.wsClient.disconnect();
     }
 
-    connectGitHub(profile: GitHubUser, followers: GitHubUser[], following: GitHubUser[]) {
+    connectGitHub(profile: GitHubUser, followers: GitHubUser[], following: GitHubUser[], guestUsername?: string) {
         // Update GitHub data
         this.profile = profile;
         this.followers = followers;
         this.following = following;
         this.isGitHubConnected = true;
 
-        // Reconnect WebSocket with GitHub token
+        // Reconnect WebSocket with GitHub token and guest alias
         const token = this.githubService.getToken();
         this.wsClient.disconnect();
         this.wsClient.connect(profile.login, token);
+
+        // Send alias to server if transitioning from guest
+        if (guestUsername) {
+            this.sendMessage({
+                type: 'createAlias',
+                githubUsername: profile.login,
+                guestUsername: guestUsername,
+                githubId: profile.id
+            });
+        }
 
         // Refresh sidebar
         this.refresh();

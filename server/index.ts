@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Octokit } from '@octokit/rest';
-import { dbService, UserPreferences } from './database';
+import { dbService, UserPreferences, UserRecord } from './database';
 import { rateLimiter } from './rateLimiter';
 import http from 'http';
 
@@ -38,12 +38,16 @@ async function validateGitHubToken(token: string): Promise<{
         const followersResponse = await octokit.users.listFollowersForAuthenticatedUser({ per_page: 100 });
         const followingResponse = await octokit.users.listFollowedByAuthenticatedUser({ per_page: 100 });
 
+        const followers = followersResponse.data.map(u => u.id);
+        const following = followingResponse.data.map(u => u.id);
+        console.log(`[DEBUG] Validated ${data.login}: ${followers.length} followers, ${following.length} following`);
+
         return {
             id: data.id,
             login: data.login,
             avatar_url: data.avatar_url,
-            followers: followersResponse.data.map(u => u.id),
-            following: followingResponse.data.map(u => u.id)
+            followers,
+            following
         };
     } catch (error) {
         console.error('GitHub token validation failed:', error);
@@ -289,6 +293,17 @@ wss.on('connection', (ws, req) => {
                         }));
                     }
                 }
+            } else if (data.type === 'createAlias') {
+                // Create username alias (guest -> GitHub)
+                if (data.githubUsername && data.guestUsername && data.githubId) {
+                    dbService.createAlias(data.githubUsername, data.guestUsername, data.githubId);
+                    console.log(`Created alias: ${data.guestUsername} -> ${data.githubUsername}`);
+
+                    ws.send(JSON.stringify({
+                        type: 'aliasCreated',
+                        success: true
+                    }));
+                }
             }
         } catch (e) {
             console.error('Error parsing message', e);
@@ -361,7 +376,13 @@ function broadcastUpdate() {
 
             // Check privacy: can receiver see this user?
             // Include manual connections as well as GitHub relationships
-            const isManuallyConnected = dbService.isManuallyConnected(receiverData.username, clientData.username);
+            // Resolve usernames through aliases to handle guest->GitHub transitions
+            const resolvedReceiver = dbService.resolveUsername(receiverData.username);
+            const resolvedClient = dbService.resolveUsername(clientData.username);
+
+            const isManuallyConnected =
+                dbService.isManuallyConnected(resolvedReceiver, resolvedClient) ||
+                dbService.isManuallyConnected(receiverData.username, clientData.username);
 
             if (isManuallyConnected || canUserSee(receiverData.githubId, clientData)) {
                 visibleUsers.push(filterUserData(clientData));
@@ -369,37 +390,100 @@ function broadcastUpdate() {
         }
 
         // Include recently disconnected users (offline with last seen)
-        for (const [username, userData] of Object.entries(Array.from(clients.values()).reduce((acc, c) => {
-            acc[c.username] = c;
-            return acc;
-        }, {} as Record<string, ClientData>))) {
-            // Skip if already in visible users
-            if (visibleUsers.some(u => u.username === username)) {
-                continue;
+        // Query database for receiver's relationships instead of relying on session data
+        if (receiverData.githubId) {
+            // Get relationships from database (more reliable than session data)
+            const dbFollowers = dbService.getFollowers(receiverData.githubId);
+            const dbFollowing = dbService.getFollowing(receiverData.githubId);
+            const closeFriends = dbService.getCloseFriends(receiverData.githubId);
+
+            const allRelatedIds = [
+                ...dbFollowers,
+                ...dbFollowing,
+                ...closeFriends
+            ];
+
+            console.log(`[DEBUG] Checking offline users for ${receiverData.username} (ID: ${receiverData.githubId})`);
+            console.log(`[DEBUG] Database relationships: ${dbFollowers.length} followers, ${dbFollowing.length} following, ${closeFriends.length} close friends`);
+            console.log(`[DEBUG] Total related IDs: ${allRelatedIds.length}`);
+
+            // Get unique IDs
+            const uniqueIds = [...new Set(allRelatedIds)];
+
+            for (const githubId of uniqueIds) {
+                // Skip if already in visible users
+                const alreadyVisible = visibleUsers.some(u => {
+                    // Check by username from clients
+                    const clientData = Array.from(clients.values()).find(c => c.githubId === githubId);
+                    return clientData && u.username === clientData.username;
+                });
+
+                if (alreadyVisible) {
+                    console.log(`[DEBUG] User ${githubId} already visible (online)`);
+                    continue;
+                }
+
+                // Get user from database
+                const dbUser = dbService.getUser(githubId);
+                if (dbUser) {
+                    const timeSinceLastSeen = Date.now() - dbUser.last_seen;
+                    console.log(`[DEBUG] Found offline user ${dbUser.username} (ID: ${githubId}), last seen ${Math.floor(timeSinceLastSeen / 1000 / 60)}m ago`);
+
+                    // Show if seen in last 7 days
+                    if (timeSinceLastSeen < 7 * 24 * 60 * 60 * 1000) {
+                        visibleUsers.push({
+                            username: dbUser.username,
+                            avatar: dbUser.avatar,
+                            status: 'Offline',
+                            activity: 'Offline',
+                            project: '',
+                            language: '',
+                            lastSeen: dbUser.last_seen
+                        });
+                        console.log(`[DEBUG] ✓ Added ${dbUser.username} to visible users as offline`);
+                    } else {
+                        console.log(`[DEBUG] ✗ User ${dbUser.username} too old (> 7 days)`);
+                    }
+                } else {
+                    console.log(`[DEBUG] ✗ GitHub ID ${githubId} not found in database`);
+                }
             }
+        }
 
-            // Check if this offline user should be visible to receiver
-            if (receiverData.githubId && userData.githubId) {
-                const isFollower = receiverData.followers.includes(userData.githubId);
-                const isFollowing = receiverData.following.includes(userData.githubId);
-                const isCloseFriend = dbService.getCloseFriends(receiverData.githubId).includes(userData.githubId);
+        // Also check manual connections for offline users
+        if (receiverData.username) {
+            const resolvedReceiver = dbService.resolveUsername(receiverData.username);
+            const manualConnections = dbService.getManualConnections(resolvedReceiver);
 
-                if (isFollower || isFollowing || isCloseFriend) {
-                    // Get from database for last seen
-                    const dbUser = dbService.getUser(userData.githubId);
-                    if (dbUser) {
-                        const timeSinceLastSeen = Date.now() - dbUser.last_seen;
+            for (const connectedUsername of manualConnections) {
+                // Skip if already visible
+                if (visibleUsers.some(u => u.username === connectedUsername)) {
+                    continue;
+                }
 
-                        // Show if seen in last 7 days
+                // Check if user is offline (not in current clients)
+                const isOnline = Array.from(aggregatedUsers.values()).some(u => u.username === connectedUsername);
+
+                if (!isOnline) {
+                    // Try to get from database if they have a GitHub account
+                    const resolvedUsername = dbService.resolveUsername(connectedUsername);
+                    let lastSeen = Date.now() - (7 * 24 * 60 * 60 * 1000); // Default to 7 days ago
+
+                    // Try to find user in database
+                    const allUsers = dbService.getAllUsers();
+                    const offlineUser = allUsers.find((u: UserRecord) => u.username === resolvedUsername || u.username === connectedUsername);
+
+                    if (offlineUser) {
+                        const timeSinceLastSeen = Date.now() - offlineUser.last_seen;
                         if (timeSinceLastSeen < 7 * 24 * 60 * 60 * 1000) {
                             visibleUsers.push({
-                                username: dbUser.username,
-                                avatar: dbUser.avatar,
+                                username: offlineUser.username,
+                                avatar: offlineUser.avatar || '',
                                 status: 'Offline',
                                 activity: 'Offline',
                                 project: '',
                                 language: '',
-                                lastSeen: dbUser.last_seen
+                                lastSeen: offlineUser.last_seen
                             });
                         }
                     }

@@ -5,7 +5,8 @@ node_modules
 .DS_Store
 .vscode
 database.sqlite
+database.sqlite-shm
+database.sqlite-wal
 .env
 logs/
 *.log
-database.*
