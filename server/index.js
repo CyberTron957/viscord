@@ -210,6 +210,52 @@ wss.on('connection', (ws, req) => {
                     broadcastUpdate(); // Re-broadcast with new privacy settings
                 }
             }
+            else if (data.type === 'createInvite') {
+                if (clientData) {
+                    const code = database_1.dbService.createInviteCode(clientData.username, 48); // 48 hours
+                    ws.send(JSON.stringify({
+                        type: 'inviteCreated',
+                        code: code,
+                        expiresIn: '48 hours'
+                    }));
+                    console.log(`Invite code created: ${code} by ${clientData.username}`);
+                }
+            }
+            else if (data.type === 'acceptInvite') {
+                if (clientData && data.code) {
+                    const success = database_1.dbService.acceptInviteCode(data.code, clientData.username);
+                    if (success) {
+                        const invite = database_1.dbService.getInviteCode(data.code);
+                        ws.send(JSON.stringify({
+                            type: 'inviteAccepted',
+                            success: true,
+                            friendUsername: invite === null || invite === void 0 ? void 0 : invite.creator_username
+                        }));
+                        // Notify the creator
+                        for (const [otherWs, otherClient] of clients.entries()) {
+                            if (otherClient.username === (invite === null || invite === void 0 ? void 0 : invite.creator_username) && otherWs.readyState === ws_1.WebSocket.OPEN) {
+                                otherWs.send(JSON.stringify({
+                                    type: 'friendJoined',
+                                    user: {
+                                        username: clientData.username,
+                                        avatar: clientData.avatar
+                                    },
+                                    via: 'invite'
+                                }));
+                            }
+                        }
+                        console.log(`Invite ${data.code} accepted by ${clientData.username}`);
+                        broadcastUpdate(); // Refresh for both users
+                    }
+                    else {
+                        ws.send(JSON.stringify({
+                            type: 'inviteAccepted',
+                            success: false,
+                            error: 'Invalid, expired, or already used invite code'
+                        }));
+                    }
+                }
+            }
         }
         catch (e) {
             console.error('Error parsing message', e);
@@ -268,7 +314,9 @@ function broadcastUpdate() {
                 continue;
             }
             // Check privacy: can receiver see this user?
-            if (canUserSee(receiverData.githubId, clientData)) {
+            // Include manual connections as well as GitHub relationships
+            const isManuallyConnected = database_1.dbService.isManuallyConnected(receiverData.username, clientData.username);
+            if (isManuallyConnected || canUserSee(receiverData.githubId, clientData)) {
                 visibleUsers.push(filterUserData(clientData));
             }
         }

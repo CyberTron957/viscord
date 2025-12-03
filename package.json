@@ -46,6 +46,16 @@
         "command": "vscode-social-presence.logout",
         "title": "Logout",
         "icon": "$(sign-out)"
+      },
+      {
+        "command": "vscode-social-presence.createInvite",
+        "title": "Create Invite Link",
+        "icon": "$(link)"
+      },
+      {
+        "command": "vscode-social-presence.acceptInvite",
+        "title": "Accept Invite Code",
+        "icon": "$(person-add)"
       }
     ],
     "menus": {
@@ -57,6 +67,11 @@
         },
         {
           "command": "vscode-social-presence.openSettings",
+          "when": "view == social-presence-view",
+          "group": "navigation"
+        },
+        {
+          "command": "vscode-social-presence.createInvite",
           "when": "view == social-presence-view",
           "group": "navigation"
         }

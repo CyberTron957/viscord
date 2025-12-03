@@ -6,34 +6,72 @@ import { GitHubService } from './githubService';
 export async function activate(context: vscode.ExtensionContext) {
     console.log('Congratulations, your extension "vscode-social-presence" is now active!');
 
-    // Initialize GitHub Service
+    // Try GitHub authentication (optional)
     const githubService = new GitHubService();
+    let profile: any = null;
+    let followers: any[] = [];
+    let following: any[] = [];
+    let useGitHub = false;
 
     try {
-        const session = await githubService.authenticate();
-        console.log('GitHub authenticated:', session.account.label);
+        // Ask user if they want to use GitHub
+        const choice = await vscode.window.showInformationMessage(
+            'How would you like to use VS Code Social Presence?',
+            'Login with GitHub',
+            'Continue without GitHub'
+        );
+
+        if (choice === 'Login with GitHub') {
+            const session = await githubService.authenticate();
+            console.log('GitHub authenticated:', session.account.label);
+
+            // Fetch GitHub profile and followers/following
+            profile = await githubService.getProfile();
+            followers = await githubService.getFollowers();
+            following = await githubService.getFollowing();
+            useGitHub = true;
+
+            console.log(`GitHub user: ${profile.login}, Followers: ${followers.length}, Following: ${following.length}`);
+        } else {
+            // Use username-only mode
+            const username = await vscode.window.showInputBox({
+                prompt: 'Enter a username for Social Presence',
+                placeHolder: 'your-username',
+                validateInput: (value) => {
+                    if (!value || value.length < 3) {
+                        return 'Username must be at least 3 characters';
+                    }
+                    if (!/^[a-zA-Z0-9_-]+$/.test(value)) {
+                        return 'Username can only contain letters, numbers, hyphens, and underscores';
+                    }
+                    return null;
+                }
+            });
+
+            if (!username) {
+                vscode.window.showErrorMessage('Username is required to use Social Presence');
+                return;
+            }
+
+            profile = { login: username };
+            useGitHub = false;
+            console.log(`Username-only mode: ${username}`);
+        }
     } catch (error) {
-        vscode.window.showErrorMessage('Failed to authenticate with GitHub. Please try again.');
-        console.error('GitHub auth error:', error);
+        vscode.window.showErrorMessage('Failed to initialize Social Presence');
+        console.error('Initialization error:', error);
         return;
     }
 
-    // Fetch GitHub profile and followers/following
-    const profile = await githubService.getProfile();
-    const followers = await githubService.getFollowers();
-    const following = await githubService.getFollowing();
-
-    console.log(`GitHub user: ${profile.login}, Followers: ${followers.length}, Following: ${following.length}`);
-
     // Create Status Bar Item
-    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left);
+    const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
     statusBarItem.text = `$(account) ${profile.login}`;
-    statusBarItem.tooltip = `VS Code Social Presence: ${profile.login}\nClick to copy username`;
+    statusBarItem.tooltip = 'Click to copy username';
     statusBarItem.command = 'vscode-social-presence.copyUsername';
     statusBarItem.show();
     context.subscriptions.push(statusBarItem);
 
-    const sidebarProvider = new SidebarProvider(context, profile, followers, following, githubService);
+    const sidebarProvider = new SidebarProvider(context, profile, followers, following, useGitHub ? githubService : null);
     vscode.window.registerTreeDataProvider('social-presence-view', sidebarProvider);
 
     const activityTracker = new ActivityTracker((status) => {

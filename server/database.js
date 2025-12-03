@@ -45,8 +45,26 @@ db.exec(`
     FOREIGN KEY (github_id) REFERENCES users(github_id)
   );
 
+  CREATE TABLE IF NOT EXISTS invite_codes (
+    code TEXT PRIMARY KEY,
+    creator_username TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    expires_at INTEGER NOT NULL,
+    used_by TEXT,
+    used_at INTEGER
+  );
+
+  CREATE TABLE IF NOT EXISTS manual_connections (
+    user1_username TEXT NOT NULL,
+    user2_username TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    PRIMARY KEY (user1_username, user2_username)
+  );
+
   CREATE INDEX IF NOT EXISTS idx_user_relationships ON user_relationships(user_github_id, relationship_type);
   CREATE INDEX IF NOT EXISTS idx_close_friends ON close_friends(user_github_id);
+  CREATE INDEX IF NOT EXISTS idx_invite_codes_creator ON invite_codes(creator_username);
+  CREATE INDEX IF NOT EXISTS idx_manual_connections ON manual_connections(user1_username);
 `);
 class DatabaseService {
     // User operations
@@ -173,6 +191,70 @@ class DatabaseService {
         const stmt = db.prepare('DELETE FROM users WHERE last_seen < ?');
         const result = stmt.run(cutoff);
         console.log(`Cleaned up ${result.changes} old users`);
+    }
+    // Invite Codes
+    createInviteCode(creatorUsername, expiresInHours = 48) {
+        // Generate unique code (6 chars: letters + numbers)
+        const code = Math.random().toString(36).substring(2, 8).toUpperCase();
+        const now = Date.now();
+        const expiresAt = now + (expiresInHours * 60 * 60 * 1000);
+        const stmt = db.prepare(`
+      INSERT INTO invite_codes (code, creator_username, created_at, expires_at)
+      VALUES (?, ?, ?, ?)
+    `);
+        stmt.run(code, creatorUsername, now, expiresAt);
+        return code;
+    }
+    getInviteCode(code) {
+        const stmt = db.prepare('SELECT * FROM invite_codes WHERE code = ?');
+        return stmt.get(code);
+    }
+    acceptInviteCode(code, acceptorUsername) {
+        const invite = this.getInviteCode(code);
+        if (!invite) {
+            return false; // Code doesn't exist
+        }
+        if (invite.used_by) {
+            return false; // Already used
+        }
+        if (Date.now() > invite.expires_at) {
+            return false; // Expired
+        }
+        if (invite.creator_username === acceptorUsername) {
+            return false; // Can't accept your own invite
+        }
+        // Mark invite as used
+        const updateStmt = db.prepare('UPDATE invite_codes SET used_by = ?, used_at = ? WHERE code = ?');
+        updateStmt.run(acceptorUsername, Date.now(), code);
+        // Create bidirectional connection
+        this.addManualConnection(invite.creator_username, acceptorUsername);
+        return true;
+    }
+    // Manual Connections (non-GitHub friends)
+    addManualConnection(user1, user2) {
+        const stmt = db.prepare(`
+      INSERT INTO manual_connections (user1_username, user2_username, created_at)
+      VALUES (?, ?, ?)
+      ON CONFLICT DO NOTHING
+    `);
+        const now = Date.now();
+        // Add both directions
+        stmt.run(user1, user2, now);
+        stmt.run(user2, user1, now);
+    }
+    removeManualConnection(user1, user2) {
+        const stmt = db.prepare('DELETE FROM manual_connections WHERE user1_username = ? AND user2_username = ?');
+        // Remove both directions
+        stmt.run(user1, user2);
+        stmt.run(user2, user1);
+    }
+    getManualConnections(username) {
+        const stmt = db.prepare('SELECT user2_username FROM manual_connections WHERE user1_username = ?');
+        return stmt.all(username).map((row) => row.user2_username);
+    }
+    isManuallyConnected(user1, user2) {
+        const stmt = db.prepare('SELECT 1 FROM manual_connections WHERE user1_username = ? AND user2_username = ?');
+        return !!stmt.get(user1, user2);
     }
     close() {
         db.close();

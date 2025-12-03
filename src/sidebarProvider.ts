@@ -3,24 +3,24 @@ import { WsClient, UserStatus } from './wsClient';
 import { GitHubService, GitHubUser } from './githubService';
 
 export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
-    private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> = new vscode.EventEmitter<TreeNode | undefined | null | void>();
-    readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | null | void> = this._onDidChangeTreeData.event;
+    private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | void> = new vscode.EventEmitter<TreeNode | undefined | void>();
+    readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | void> = this._onDidChangeTreeData.event;
 
     private allUsers: UserStatus[] = [];
     private wsClient: WsClient;
     private context: vscode.ExtensionContext;
-    private profile: GitHubUser;
-    private followers: GitHubUser[];
-    private following: GitHubUser[];
-    private githubService: GitHubService;
+    private profile: any;
+    private followers: any[];
+    private following: any[];
+    private githubService: GitHubService | null;
     private closeFriends: string[] = [];
 
     constructor(
         context: vscode.ExtensionContext,
-        profile: GitHubUser,
-        followers: GitHubUser[],
-        following: GitHubUser[],
-        githubService: GitHubService
+        profile: any,
+        followers: any[],
+        following: any[],
+        githubService: GitHubService | null
     ) {
         this.context = context;
         this.profile = profile;
@@ -35,7 +35,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         });
 
         // Connect with GitHub username and token
-        const token = githubService.getToken();
+        const token = githubService?.getToken();
         this.wsClient.connect(profile.login, token);
     }
 
@@ -128,6 +128,10 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
 
     public updateStatus(status: Partial<UserStatus>) {
         this.wsClient.updateStatus(status);
+    }
+
+    sendMessage(data: any) {
+        this.wsClient.send(data);
     }
 }
 

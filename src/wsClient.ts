@@ -64,7 +64,34 @@ export class WsClient {
                     } else if (message.type === 'friendJoined') {
                         // Handle friend joined notification
                         console.log('Friend joined:', message.user);
-                        // You could show a VS Code notification here
+                        const vscode = require('vscode');
+                        vscode.window.showInformationMessage(
+                            `${message.user.username} is now online!`,
+                            'View'
+                        );
+                    } else if (message.type === 'inviteCreated') {
+                        const vscode = require('vscode');
+                        const inviteLink = `Invite Code: ${message.code}`;
+                        vscode.window.showInformationMessage(
+                            `${inviteLink} (expires in ${message.expiresIn})`,
+                            'Copy Code'
+                        ).then((selection: string | undefined) => {
+                            if (selection === 'Copy Code') {
+                                vscode.env.clipboard.writeText(message.code);
+                                vscode.window.showInformationMessage('Invite code copied to clipboard!');
+                            }
+                        });
+                    } else if (message.type === 'inviteAccepted') {
+                        const vscode = require('vscode');
+                        if (message.success) {
+                            vscode.window.showInformationMessage(
+                                `Successfully connected with ${message.friendUsername}!`
+                            );
+                        } else {
+                            vscode.window.showErrorMessage(
+                                message.error || 'Failed to accept invite code'
+                            );
+                        }
                     }
                 } catch (e) {
                     console.error('Error parsing message', e);
