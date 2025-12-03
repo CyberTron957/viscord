@@ -8,3 +8,4 @@ database.sqlite
 .env
 logs/
 *.log
+database.*

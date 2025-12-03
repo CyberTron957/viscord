@@ -3,30 +3,33 @@ import { WsClient, UserStatus } from './wsClient';
 import { GitHubService, GitHubUser } from './githubService';
 
 export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
-    private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | void> = new vscode.EventEmitter<TreeNode | undefined | void>();
-    readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | void> = this._onDidChangeTreeData.event;
+    private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> = new vscode.EventEmitter<TreeNode | undefined | null | void>();
+    readonly onDidChangeTreeData: vscode.Event<TreeNode | undefined | null | void> = this._onDidChangeTreeData.event;
 
     private allUsers: UserStatus[] = [];
     private wsClient: WsClient;
     private context: vscode.ExtensionContext;
-    private profile: any;
-    private followers: any[];
-    private following: any[];
-    private githubService: GitHubService | null;
+    private profile: GitHubUser;
+    private followers: GitHubUser[];
+    private following: GitHubUser[];
+    private githubService: GitHubService;
     private closeFriends: string[] = [];
+    private isGitHubConnected: boolean;
 
     constructor(
         context: vscode.ExtensionContext,
-        profile: any,
-        followers: any[],
-        following: any[],
-        githubService: GitHubService | null
+        profile: GitHubUser,
+        followers: GitHubUser[],
+        following: GitHubUser[],
+        githubService: GitHubService,
+        isGitHubConnected: boolean
     ) {
         this.context = context;
         this.profile = profile;
         this.followers = followers;
         this.following = following;
         this.githubService = githubService;
+        this.isGitHubConnected = isGitHubConnected;
         this.closeFriends = this.context.globalState.get<string[]>('closeFriends', []);
 
         this.wsClient = new WsClient((users) => {
@@ -34,8 +37,8 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
             this.refresh();
         });
 
-        // Connect with GitHub username and token
-        const token = githubService?.getToken();
+        // Connect with username and optional token
+        const token = this.isGitHubConnected ? githubService.getToken() : undefined;
         this.wsClient.connect(profile.login, token);
     }
 
@@ -132,6 +135,70 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
 
     sendMessage(data: any) {
         this.wsClient.send(data);
+    }
+
+    reconnectAsGuest(guestUsername: string) {
+        // Disconnect current connection
+        this.wsClient.disconnect();
+
+        // Clear followers/following
+        this.followers = [];
+        this.following = [];
+
+        // Update profile
+        this.profile = {
+            login: guestUsername,
+            avatar_url: 'https://avatars.githubusercontent.com/u/0?s=200&v=4',
+            html_url: ''
+        } as any;
+
+        // Reconnect with guest credentials (no token)
+        this.wsClient.connect(guestUsername, undefined);
+
+        // Refresh the sidebar
+        this.refresh();
+    }
+
+    disconnect() {
+        this.wsClient.disconnect();
+    }
+
+    connectGitHub(profile: GitHubUser, followers: GitHubUser[], following: GitHubUser[]) {
+        // Update GitHub data
+        this.profile = profile;
+        this.followers = followers;
+        this.following = following;
+        this.isGitHubConnected = true;
+
+        // Reconnect WebSocket with GitHub token
+        const token = this.githubService.getToken();
+        this.wsClient.disconnect();
+        this.wsClient.connect(profile.login, token);
+
+        // Refresh sidebar
+        this.refresh();
+    }
+
+    disconnectGitHub(guestUsername: string) {
+        // Clear GitHub data
+        this.followers = [];
+        this.following = [];
+        this.isGitHubConnected = false;
+
+        // Update profile to guest
+        this.profile = {
+            id: 0, // Guest users have ID 0
+            login: guestUsername,
+            avatar_url: 'https://avatars.githubusercontent.com/u/0?s=200&v=4',
+            html_url: ''
+        } as GitHubUser;
+
+        // Reconnect WebSocket without token (manual connections preserved)
+        this.wsClient.disconnect();
+        this.wsClient.connect(guestUsername, undefined);
+
+        // Refresh sidebar
+        this.refresh();
     }
 }
 

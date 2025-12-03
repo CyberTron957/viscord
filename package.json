@@ -48,6 +48,11 @@
         "icon": "$(sign-out)"
       },
       {
+        "command": "vscode-social-presence.connectGitHub",
+        "title": "Connect GitHub",
+        "icon": "$(github)"
+      },
+      {
         "command": "vscode-social-presence.createInvite",
         "title": "Create Invite Link",
         "icon": "$(link)"
@@ -73,6 +78,21 @@
         {
           "command": "vscode-social-presence.createInvite",
           "when": "view == social-presence-view",
+          "group": "navigation"
+        },
+        {
+          "command": "vscode-social-presence.acceptInvite",
+          "when": "view == social-presence-view",
+          "group": "navigation"
+        },
+        {
+          "command": "vscode-social-presence.connectGitHub",
+          "when": "view == social-presence-view && !vscode-social-presence:githubConnected",
+          "group": "navigation"
+        },
+        {
+          "command": "vscode-social-presence.logout",
+          "when": "view == social-presence-view && vscode-social-presence:githubConnected",
           "group": "navigation"
         }
       ],
