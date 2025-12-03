@@ -64,11 +64,7 @@ export class WsClient {
                     } else if (message.type === 'friendJoined') {
                         // Handle friend joined notification
                         console.log('Friend joined:', message.user);
-                        const vscode = require('vscode');
-                        vscode.window.showInformationMessage(
-                            `${message.user.username} is now online!`,
-                            'View'
-                        );
+                        // Notification removed as per user request
                     } else if (message.type === 'inviteCreated') {
                         const vscode = require('vscode');
                         const inviteLink = `Invite Code: ${message.code}`;

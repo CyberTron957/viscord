@@ -114,7 +114,7 @@
         },
         {
           "command": "vscode-social-presence.removeConnection",
-          "when": "view == social-presence-friends && viewItem == user",
+          "when": "view == social-presence-friends && viewItem == user-manual",
           "group": "manage"
         }
       ]
@@ -132,11 +132,13 @@
       "social-presence-sidebar": [
         {
           "id": "social-presence-friends",
-          "name": "Close Friends & Guests"
+          "name": "Close Friends & Guests",
+          "icon": "$(heart)"
         },
         {
           "id": "social-presence-github",
-          "name": "GitHub Network"
+          "name": "GitHub Network",
+          "icon": "$(github)"
         }
       ],
       "explorer": [

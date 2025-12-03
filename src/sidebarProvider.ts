@@ -127,7 +127,19 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
                 break;
         }
 
-        return users.map(u => new UserNode(u, vscode.TreeItemCollapsibleState.None));
+        return users.map(u => {
+            // Determine if manual connection
+            // If not connected to GitHub, everyone is manual
+            // If connected, check if user is NOT in followers/following
+            let isManual = !this.isGitHubConnected;
+            if (this.isGitHubConnected) {
+                const isFollower = this.followers.some(f => f.login.toLowerCase() === u.username.toLowerCase());
+                const isFollowing = this.following.some(f => f.login.toLowerCase() === u.username.toLowerCase());
+                isManual = !isFollower && !isFollowing;
+            }
+
+            return new UserNode(u, vscode.TreeItemCollapsibleState.None, isManual);
+        });
     }
 
     private getFollowingUsers(): UserStatus[] {
@@ -316,20 +328,46 @@ class Category extends vscode.TreeItem {
 class UserNode extends vscode.TreeItem {
     constructor(
         public user: UserStatus,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState
+        public readonly collapsibleState: vscode.TreeItemCollapsibleState,
+        isManualConnection: boolean = false
     ) {
         super(user.username, collapsibleState);
 
-        // Format description with last seen if offline
-        let description = `${user.status} - ${user.activity}`;
-        if (user.status === 'Offline' && user.lastSeen) {
-            const lastSeenTime = this.formatLastSeen(user.lastSeen);
-            description = `Offline - Last seen ${lastSeenTime}`;
+        // Richer description: Activity • Project (Language)
+        let description = '';
+
+        if (user.status === 'Offline') {
+            if (user.lastSeen) {
+                const lastSeenTime = this.formatLastSeen(user.lastSeen);
+                description = `Last seen ${lastSeenTime}`;
+            } else {
+                description = 'Offline';
+            }
+        } else {
+            // Online/Away
+            const parts = [];
+            if (user.activity) parts.push(user.activity);
+
+            // Only show project/lang if not Hidden
+            if (user.project && user.project !== 'Hidden') parts.push(user.project);
+            if (user.language && user.language !== 'Hidden') parts.push(`(${user.language})`);
+
+            description = parts.join(' • ');
         }
 
-        this.tooltip = `${user.username} - ${user.status}\nProject: ${user.project}\nLanguage: ${user.language}`;
+        this.tooltip = new vscode.MarkdownString(
+            `**${user.username}**\n\n` +
+            `Status: ${user.status}\n` +
+            `Activity: ${user.activity}\n` +
+            (user.project && user.project !== 'Hidden' ? `Project: ${user.project}\n` : '') +
+            (user.language && user.language !== 'Hidden' ? `Language: ${user.language}` : '')
+        );
+
         this.description = description;
-        this.contextValue = 'user';
+
+        // Set context value for commands
+        // 'user' is the base context. We add 'manual' if it's a manual connection.
+        this.contextValue = isManualConnection ? 'user-manual' : 'user';
 
         this.setIcon(user.status);
     }
@@ -342,24 +380,22 @@ class UserNode extends vscode.TreeItem {
         const hours = Math.floor(diff / 3600000);
         const days = Math.floor(diff / 86400000);
 
-        if (minutes < 1) {
-            return 'just now';
-        } else if (minutes < 60) {
-            return `${minutes}m ago`;
-        } else if (hours < 24) {
-            return `${hours}h ago`;
-        } else {
-            return `${days}d ago`;
-        }
+        if (minutes < 1) return 'just now';
+        if (minutes < 60) return `${minutes}m ago`;
+        if (hours < 24) return `${hours}h ago`;
+        return `${days}d ago`;
     }
 
     private setIcon(status: string) {
         if (status === 'Online') {
-            this.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('testing.iconPassed'));
+            // Vibrant Green Dot
+            this.iconPath = new vscode.ThemeIcon('record', new vscode.ThemeColor('charts.green'));
         } else if (status === 'Away') {
-            this.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('testing.iconSkipped'));
+            // Vibrant Yellow Dot
+            this.iconPath = new vscode.ThemeIcon('record', new vscode.ThemeColor('charts.yellow'));
         } else {
-            this.iconPath = new vscode.ThemeIcon('circle-outline');
+            // Grey Outline
+            this.iconPath = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('charts.gray'));
         }
     }
 }
