@@ -143,9 +143,8 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
             new Category('Close Friends', vscode.TreeItemCollapsibleState.Expanded, closeFriendsCount)
         ];
 
-        // Add connection status indicator at the bottom
-        categories.push(new StatusIndicatorNode(this._connectionStatus));
 
+        // Status indicator moved to separate "Connection Status" view
         return categories;
     }
 

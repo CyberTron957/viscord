@@ -1,10 +1,39 @@
 {
-  "name": "vscode-social-presence",
-  "displayName": "VS Code Social Presence",
-  "description": "See your friends' coding status in the sidebar.",
-  "version": "0.0.1",
+  "name": "viscord",
+  "displayName": "Viscord",
+  "description": "See your GitHub friends' real-time coding status in VS Code. Know what your followers and following are working on!",
+  "version": "1.0.0",
+  "publisher": "CyberTron957",
+  "author": {
+    "name": "Pradhyun"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/CyberTron957/viscord.git"
+  },
+  "bugs": {
+    "url": "https://github.com/CyberTron957/viscord/issues"
+  },
+  "homepage": "https://github.com/CyberTron957/viscord#readme",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#1e1e1e",
+    "theme": "dark"
+  },
+  "keywords": [
+    "social",
+    "presence",
+    "github",
+    "friends",
+    "coding",
+    "status",
+    "collaboration",
+    "real-time",
+    "websocket"
+  ],
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.85.0"
   },
   "categories": [
     "Other"
@@ -154,6 +183,11 @@
           "id": "social-presence-github",
           "name": "GitHub Network",
           "icon": "$(github)"
+        },
+        {
+          "id": "social-presence-status",
+          "name": "Connection Status",
+          "icon": "$(pulse)"
         }
       ],
       "explorer": [
@@ -178,7 +212,7 @@
       }
     ],
     "configuration": {
-      "title": "VS Code Social Presence",
+      "title": "Viscord",
       "properties": {
         "vscode-social-presence.username": {
           "type": "string",
@@ -264,7 +298,7 @@
     "@types/mocha": "^10.0.1",
     "@types/node": "20.2.5",
     "@types/sqlite3": "^3.1.11",
-    "@types/vscode": "^1.106.1",
+    "@types/vscode": "^1.85.0",
     "@types/ws": "^8.18.1",
     "@typescript-eslint/eslint-plugin": "^5.59.8",
     "@typescript-eslint/parser": "^5.59.8",

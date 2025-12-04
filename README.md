@@ -1,4 +1,4 @@
-# VS Code Social Presence 👥
+# Viscord 👥
 
 A VS Code extension that shows your GitHub friends' real-time coding status! See what your followers and following are working on, all within VS Code.
 
@@ -73,8 +73,8 @@ A VS Code extension that shows your GitHub friends' real-time coding status! See
 
 #### From Source
 ```bash
-git clone https://github.com/yourusername/vscode-social-presence.git
-cd vscode-social-presence
+git clone https://github.com/CyberTron957/viscord.git
+cd viscord
 npm install
 npm run compile
 ```
@@ -127,7 +127,7 @@ node server/index.js
 ## 📁 Project Structure
  
 ```
-vscode-social-presence/
+viscord/
 ├── src/
 │   ├── extension.ts          # Extension entry point
 │   ├── githubService.ts       # GitHub OAuth & API
@@ -228,10 +228,10 @@ Contributions welcome! Please open an issue or PR on GitHub.
 
 ## 📧 Support
 
-- 🐛 Report bugs: [GitHub Issues](https://github.com/yourusername/vscode-social-presence/issues)
-- 💬 Discussion: [GitHub Discussions](https://github.com/yourusername/vscode-social-presence/discussions)
-- 📧 Email: your-email@example.com
+- 🐛 Report bugs: [GitHub Issues](https://github.com/CyberTron957/viscord/issues)
+- 💬 Discussion: [GitHub Discussions](https://github.com/CyberTron957/viscord/discussions)
+- 🌐 Server: https://viscord.bellnexx.com
 
 ---
 
-Made with ❤️ by [Your Name]
+Made with ❤️ by [CyberTron957](https://github.com/CyberTron957)

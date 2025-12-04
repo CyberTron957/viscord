@@ -92,6 +92,63 @@ export async function activate(context: vscode.ExtensionContext) {
     });
     context.subscriptions.push(githubTreeView);
 
+    // 3. Connection Status View
+    const statusProvider = {
+        getTreeItem: (element: vscode.TreeItem) => element,
+        getChildren: () => {
+            const status = sidebarProvider.connectionStatus;
+            const statusNode = new (class extends vscode.TreeItem {
+                constructor() {
+                    let label: string;
+                    let icon: vscode.ThemeIcon;
+                    let tooltip: string;
+
+                    switch (status) {
+                        case 'connected':
+                            label = 'Connected';
+                            icon = new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
+                            tooltip = 'Connected to server';
+                            break;
+                        case 'connecting':
+                            label = 'Connecting...';
+                            icon = new vscode.ThemeIcon('sync~spin', new vscode.ThemeColor('charts.yellow'));
+                            tooltip = 'Connecting to server...';
+                            break;
+                        case 'error':
+                            label = 'Connection Error';
+                            icon = new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
+                            tooltip = 'Failed to connect. Click refresh to retry.';
+                            break;
+                        case 'disconnected':
+                        default:
+                            label = 'Disconnected';
+                            icon = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('charts.gray'));
+                            tooltip = 'Not connected to server';
+                            break;
+                    }
+
+                    super(label, vscode.TreeItemCollapsibleState.None);
+                    this.iconPath = icon;
+                    this.tooltip = tooltip;
+                    this.contextValue = 'statusIndicator';
+                }
+            })();
+            return Promise.resolve([statusNode]);
+        }
+    };
+
+    const statusTreeView = vscode.window.createTreeView('social-presence-status', {
+        treeDataProvider: statusProvider
+    });
+    context.subscriptions.push(statusTreeView);
+
+    // Listen to connection status changes and refresh status view
+    sidebarProvider.onConnectionStatusChanged(() => {
+        (statusProvider as any)._onDidChangeTreeData?.fire();
+        // Trigger refresh by recreating the tree
+        vscode.commands.executeCommand('setContext', 'vscode-social-presence:statusChanged', Date.now());
+    });
+
     // ... (rest of code)
 
     // Reset Extension - Full reset to fresh install state
@@ -152,8 +209,9 @@ export async function activate(context: vscode.ExtensionContext) {
         const onlineUsers = users.filter(u => u.status !== 'Offline');
         const onlineCount = onlineUsers.length;
 
-        // Update explorer provider
-        explorerProvider.updateUsers(users);
+        // Update explorer provider with pinned friends only
+        const pinnedFriends = context.globalState.get<string[]>('closeFriends', []);
+        explorerProvider.updateUsers(users, pinnedFriends);
 
         // Update status bar if enabled
         if (config.get('showInStatusBar', true)) {

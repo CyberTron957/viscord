@@ -6,6 +6,7 @@ export class ExplorerPresenceProvider implements vscode.TreeDataProvider<UserIte
     readonly onDidChangeTreeData: vscode.Event<UserItem | undefined | null | void> = this._onDidChangeTreeData.event;
 
     private onlineUsers: UserStatus[] = [];
+    private pinnedFriends: string[] = [];
 
     constructor() { }
 
@@ -13,9 +14,10 @@ export class ExplorerPresenceProvider implements vscode.TreeDataProvider<UserIte
         this._onDidChangeTreeData.fire();
     }
 
-    updateUsers(users: UserStatus[]): void {
+    updateUsers(users: UserStatus[], pinnedFriends: string[]): void {
         // Only show online users (not offline)
         this.onlineUsers = users.filter(u => u.status !== 'Offline');
+        this.pinnedFriends = pinnedFriends;
         this.refresh();
     }
 
@@ -32,10 +34,16 @@ export class ExplorerPresenceProvider implements vscode.TreeDataProvider<UserIte
             return Promise.resolve([]);
         }
 
-        // Show online users sorted by status (Active > Idle)
-        const sorted = [...this.onlineUsers].sort((a, b) => {
-            if (a.status === 'Active' && b.status !== 'Active') return -1;
-            if (a.status !== 'Active' && b.status === 'Active') return 1;
+        // Filter to show ONLY pinned close friends
+        const pinnedLower = this.pinnedFriends.map(f => f.toLowerCase());
+        const pinnedOnlineUsers = this.onlineUsers.filter(u =>
+            pinnedLower.includes(u.username.toLowerCase())
+        );
+
+        // Sort by status (Active > Idle)
+        const sorted = [...pinnedOnlineUsers].sort((a, b) => {
+            if (a.status === 'Online' && b.status !== 'Online') return -1;
+            if (a.status !== 'Online' && b.status === 'Online') return 1;
             return a.username.localeCompare(b.username);
         });
 
