@@ -80,7 +80,16 @@ export class WsClient {
         this.setConnectionStatus('connecting');
 
         try {
-            this.ws = new WebSocket('ws://localhost:8080');
+            // Get WebSocket URL from settings
+            const config = vscode.workspace.getConfiguration('vscode-social-presence');
+            const useCustomServer = config.get<boolean>('useCustomServer', false);
+            const customServerUrl = config.get<string>('customServerUrl', 'ws://localhost:8080');
+
+            // Use official production server by default, or custom URL if enabled
+            const serverUrl = useCustomServer ? customServerUrl : 'wss://viscord.bellnexx.com';
+
+            console.log(`Connecting to WebSocket server: ${serverUrl}`);
+            this.ws = new WebSocket(serverUrl);
 
             this.ws.on('open', () => {
                 console.log('Connected to WebSocket server');
@@ -88,7 +97,7 @@ export class WsClient {
                 this.setConnectionStatus('connected');
 
                 const config = vscode.workspace.getConfiguration('vscode-social-presence');
-                const visibilityMode = config.get('visibilityMode', 'everyone');
+                const visibilityMode = config.get<string>('visibilityMode', 'everyone');
 
                 this.send({
                     type: 'login',

@@ -227,6 +227,16 @@
           "default": true,
           "description": "Show online count badge on the Social Presence icon."
         },
+        "vscode-social-presence.useCustomServer": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable custom server URL for local testing. Leave disabled to use the official server."
+        },
+        "vscode-social-presence.customServerUrl": {
+          "type": "string",
+          "default": "ws://localhost:8080",
+          "description": "Custom WebSocket server URL (only used when 'Use Custom Server' is enabled)."
+        },
         "vscode-social-presence.clearCache": {
           "type": "null",
           "markdownDescription": "**[Clear Cache](command:vscode-social-presence.clearCache)** - Clear cached data and refresh connections without signing out."

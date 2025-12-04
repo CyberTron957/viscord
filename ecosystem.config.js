@@ -9,7 +9,8 @@ module.exports = {
         env: {
             NODE_ENV: 'production',
             PORT: 8080,
-            DB_PATH: './database.sqlite'
+            DB_PATH: './database.sqlite',
+            BACKUP_DIR: './backups'
         },
         error_file: './logs/err.log',
         out_file: './logs/out.log',

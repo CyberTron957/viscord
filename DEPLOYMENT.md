@@ -75,16 +75,24 @@ sudo apt install caddy
 
 ## 3. Start the Application
 
-Use PM2 to keep the application running:
+Use PM2 with the ecosystem file for best practices:
 
 ```bash
-# Start the server
-pm2 start server/index.js --name social-presence
+# Recommended: Start using ecosystem file (sets NODE_ENV=production automatically)
+pm2 start ecosystem.config.js
+
+# Alternative: Manual start with environment variable
+NODE_ENV=production pm2 start server/index.js --name social-presence
 
 # Save the process list to restart on reboot
 pm2 save
 pm2 startup
 ```
+
+**Important**: Always use `ecosystem.config.js` or set `NODE_ENV=production` to enable:
+- Automatic database backups every 6 hours
+- Production-optimized logging
+- Performance optimizations
 
 ## 4. Security Verification
 
