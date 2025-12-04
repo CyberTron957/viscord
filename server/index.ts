@@ -236,7 +236,7 @@ wss.on('connection', (ws, req) => {
                 }
 
                 clients.set(ws, newClientData);
-                broadcastUpdate();
+                scheduleBroadcast();
 
             } else if (data.type === 'statusUpdate') {
                 if (clientData) {
@@ -244,14 +244,14 @@ wss.on('connection', (ws, req) => {
                     clientData.activity = data.activity || clientData.activity;
                     clientData.project = data.project || clientData.project;
                     clientData.language = data.language || clientData.language;
-                    broadcastUpdate();
+                    scheduleBroadcast();
                 }
             } else if (data.type === 'updatePreferences') {
                 if (clientData && clientData.githubId) {
                     dbService.updateUserPreferences(clientData.githubId, data.preferences);
                     clientData.preferences = dbService.getUserPreferences(clientData.githubId);
                     ws.send(JSON.stringify({ type: 'preferencesUpdated', preferences: clientData.preferences }));
-                    broadcastUpdate(); // Re-broadcast with new privacy settings
+                    scheduleBroadcast(); // Re-broadcast with new privacy settings
                 }
             } else if (data.type === 'createInvite') {
                 if (clientData) {
@@ -291,7 +291,7 @@ wss.on('connection', (ws, req) => {
                         }
 
                         console.log(`Invite ${data.code} accepted by ${clientData.username}`);
-                        broadcastUpdate(); // Refresh for both users
+                        scheduleBroadcast(); // Refresh for both users
                     } else {
                         ws.send(JSON.stringify({
                             type: 'inviteAccepted',
@@ -327,7 +327,7 @@ wss.on('connection', (ws, req) => {
                     }));
 
                     // Broadcast update to refresh user lists
-                    broadcastUpdate();
+                    scheduleBroadcast();
                 }
             }
         } catch (e) {
@@ -339,17 +339,110 @@ wss.on('connection', (ws, req) => {
     ws.on('close', () => {
         const clientData = clients.get(ws);
         if (clientData && clientData.githubId) {
-            dbService.updateLastSeen(clientData.githubId);
+            // Schedule batched write instead of immediate
+            scheduleLastSeenUpdate(clientData.githubId);
             console.log(`User ${clientData.username} disconnected`);
         }
         clients.delete(ws);
-        broadcastUpdate();
+        scheduleBroadcast();
     });
 
     ws.on('error', (error) => {
         console.error('WebSocket error:', error);
     });
 });
+
+// --- Performance Optimizations ---
+
+// 1. Broadcast Debouncing: Wait 2 seconds before broadcasting to batch updates
+let broadcastTimer: NodeJS.Timeout | null = null;
+let broadcastPending = false;
+
+function scheduleBroadcast() {
+    if (broadcastTimer) {
+        // Already scheduled, just mark as pending
+        broadcastPending = true;
+        return;
+    }
+
+    broadcastTimer = setTimeout(() => {
+        broadcastUpdate();
+        broadcastTimer = null;
+
+        // If another broadcast was requested during debounce, schedule it
+        if (broadcastPending) {
+            broadcastPending = false;
+            scheduleBroadcast();
+        }
+    }, 2000); // 2 second debounce
+}
+
+// 2. Offline User Cache: Cache DB queries to avoid repeated lookups
+interface OfflineUserCache {
+    users: any[];
+    timestamp: number;
+}
+
+const offlineUserCache = new Map<number, OfflineUserCache>();
+const OFFLINE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCachedOfflineUsers(githubId: number, followers: number[], following: number[]): any[] {
+    const cached = offlineUserCache.get(githubId);
+
+    // Return cached if still valid
+    if (cached && Date.now() - cached.timestamp < OFFLINE_CACHE_TTL) {
+        return cached.users;
+    }
+
+    // Fetch from DB
+    const dbFollowers = dbService.getFollowers(githubId);
+    const dbFollowing = dbService.getFollowing(githubId);
+    const closeFriends = dbService.getCloseFriends(githubId);
+
+    const allRelatedIds = [...new Set([...dbFollowers, ...dbFollowing, ...closeFriends])];
+    const offlineUsers: any[] = [];
+
+    for (const relatedId of allRelatedIds) {
+        const dbUser = dbService.getUser(relatedId);
+        if (dbUser) {
+            const timeSinceLastSeen = Date.now() - dbUser.last_seen;
+            if (timeSinceLastSeen < 7 * 24 * 60 * 60 * 1000) {
+                offlineUsers.push({
+                    username: dbUser.username,
+                    avatar: dbUser.avatar,
+                    status: 'Offline',
+                    activity: 'Offline',
+                    project: '',
+                    language: '',
+                    lastSeen: dbUser.last_seen
+                });
+            }
+        }
+    }
+
+    // Cache the result
+    offlineUserCache.set(githubId, { users: offlineUsers, timestamp: Date.now() });
+
+    return offlineUsers;
+}
+
+// 3. Batch Database Writes: Don't write last_seen on every disconnect
+const pendingLastSeenWrites = new Map<number, number>();
+
+function scheduleLastSeenUpdate(githubId: number) {
+    pendingLastSeenWrites.set(githubId, Date.now());
+}
+
+// Flush pending writes every 30 seconds
+setInterval(() => {
+    if (pendingLastSeenWrites.size > 0) {
+        console.log(`Flushing ${pendingLastSeenWrites.size} last_seen updates`);
+        for (const [githubId, timestamp] of pendingLastSeenWrites) {
+            dbService.updateLastSeen(githubId);
+        }
+        pendingLastSeenWrites.clear();
+    }
+}, 30000);
 
 function broadcastUpdate() {
     // First, aggregate all sessions per user (handle multiple windows)
@@ -415,62 +508,19 @@ function broadcastUpdate() {
         }
 
         // Include recently disconnected users (offline with last seen)
-        // Query database for receiver's relationships instead of relying on session data
+        // Use cached offline users instead of querying DB every time
         if (receiverData.githubId) {
-            // Get relationships from database (more reliable than session data)
-            const dbFollowers = dbService.getFollowers(receiverData.githubId);
-            const dbFollowing = dbService.getFollowing(receiverData.githubId);
-            const closeFriends = dbService.getCloseFriends(receiverData.githubId);
+            const cachedOffline = getCachedOfflineUsers(
+                receiverData.githubId,
+                receiverData.followers,
+                receiverData.following
+            );
 
-            const allRelatedIds = [
-                ...dbFollowers,
-                ...dbFollowing,
-                ...closeFriends
-            ];
-
-            console.log(`[DEBUG] Checking offline users for ${receiverData.username} (ID: ${receiverData.githubId})`);
-            console.log(`[DEBUG] Database relationships: ${dbFollowers.length} followers, ${dbFollowing.length} following, ${closeFriends.length} close friends`);
-            console.log(`[DEBUG] Total related IDs: ${allRelatedIds.length}`);
-
-            // Get unique IDs
-            const uniqueIds = [...new Set(allRelatedIds)];
-
-            for (const githubId of uniqueIds) {
-                // Skip if already in visible users
-                const alreadyVisible = visibleUsers.some(u => {
-                    // Check by username from clients
-                    const clientData = Array.from(clients.values()).find(c => c.githubId === githubId);
-                    return clientData && u.username === clientData.username;
-                });
-
-                if (alreadyVisible) {
-                    console.log(`[DEBUG] User ${githubId} already visible (online)`);
-                    continue;
-                }
-
-                // Get user from database
-                const dbUser = dbService.getUser(githubId);
-                if (dbUser) {
-                    const timeSinceLastSeen = Date.now() - dbUser.last_seen;
-                    console.log(`[DEBUG] Found offline user ${dbUser.username} (ID: ${githubId}), last seen ${Math.floor(timeSinceLastSeen / 1000 / 60)}m ago`);
-
-                    // Show if seen in last 7 days
-                    if (timeSinceLastSeen < 7 * 24 * 60 * 60 * 1000) {
-                        visibleUsers.push({
-                            username: dbUser.username,
-                            avatar: dbUser.avatar,
-                            status: 'Offline',
-                            activity: 'Offline',
-                            project: '',
-                            language: '',
-                            lastSeen: dbUser.last_seen
-                        });
-                        console.log(`[DEBUG] ✓ Added ${dbUser.username} to visible users as offline`);
-                    } else {
-                        console.log(`[DEBUG] ✗ User ${dbUser.username} too old (> 7 days)`);
-                    }
-                } else {
-                    console.log(`[DEBUG] ✗ GitHub ID ${githubId} not found in database`);
+            // Filter out users who are already in visible (online) list
+            for (const offlineUser of cachedOffline) {
+                const alreadyVisible = visibleUsers.some(u => u.username === offlineUser.username);
+                if (!alreadyVisible) {
+                    visibleUsers.push(offlineUser);
                 }
             }
         }
@@ -492,7 +542,6 @@ function broadcastUpdate() {
                 if (!isOnline) {
                     // Try to get from database if they have a GitHub account
                     const resolvedUsername = dbService.resolveUsername(connectedUsername);
-                    let lastSeen = Date.now() - (7 * 24 * 60 * 60 * 1000); // Default to 7 days ago
 
                     // Try to find user in database
                     const allUsers = dbService.getAllUsers();
@@ -522,6 +571,7 @@ function broadcastUpdate() {
         }));
     }
 }
+
 
 server.listen(PORT, () => {
     console.log(`WebSocket server started on port ${PORT}`);
