@@ -9,6 +9,8 @@ export class ActivityTracker {
     private updateThrottleMs = 5000; // 5 seconds - only send updates max once per 5 seconds
     private lastSentStatus: Partial<UserStatus> = {};
     private pendingUpdate: NodeJS.Timeout | null = null;
+    private currentActivity: string = 'Idle'; // Track current activity state
+    private isWindowFocused: boolean = true; // Track if this VS Code window is focused
 
     constructor(statusUpdateCallback: (status: Partial<UserStatus>) => void) {
         this.statusUpdateCallback = statusUpdateCallback;
@@ -16,31 +18,85 @@ export class ActivityTracker {
     }
 
     private initialize() {
-        // Detect active editor changes
-        vscode.window.onDidChangeActiveTextEditor(() => {
-            this.updateActivity();
+        // Track window focus state
+        this.isWindowFocused = vscode.window.state.focused;
+
+        // Detect window focus changes
+        vscode.window.onDidChangeWindowState((state) => {
+            const wasFocused = this.isWindowFocused;
+            this.isWindowFocused = state.focused;
+
+            console.log(`Window focus changed: ${wasFocused} -> ${this.isWindowFocused}`);
+
+            if (this.isWindowFocused && !wasFocused) {
+                // Window just gained focus - immediately update with current state
+                console.log('Window gained focus - sending current status');
+                this.updateActivity(this.currentActivity, true); // Force immediate update
+            } else if (!this.isWindowFocused && wasFocused) {
+                // Window just lost focus - immediately send Idle
+                console.log('Window lost focus - sending Idle status');
+                this.currentActivity = 'Idle';
+                this.statusUpdateCallback({
+                    activity: 'Idle',
+                    status: 'Away',
+                    project: '',
+                    language: ''
+                });
+            }
         });
 
-        // Detect typing
-        vscode.workspace.onDidChangeTextDocument(() => {
-            this.resetIdleTimer();
-            this.updateActivity('Coding');
+        // Detect active editor changes
+        vscode.window.onDidChangeActiveTextEditor(() => {
+            if (this.isWindowFocused) {
+                this.updateActivity();
+            }
+        });
+
+        // Detect typing - immediately set to Coding
+        vscode.workspace.onDidChangeTextDocument((e) => {
+            // Ignore changes from files that are not user-editable
+            if (e.document.uri.scheme === 'file' && this.isWindowFocused) {
+                this.currentActivity = 'Coding';
+                this.resetIdleTimer();
+                this.updateActivity('Coding');
+            }
         });
 
         // Detect debugging
         vscode.debug.onDidStartDebugSession(() => {
-            this.statusUpdateCallback({ activity: 'Debugging', status: 'Do Not Disturb' });
+            if (this.isWindowFocused) {
+                this.currentActivity = 'Debugging';
+                this.statusUpdateCallback({ activity: 'Debugging', status: 'Online' });
+            }
         });
 
         vscode.debug.onDidTerminateDebugSession(() => {
-            this.updateActivity();
+            if (this.isWindowFocused) {
+                this.currentActivity = 'Reading';
+                this.updateActivity();
+            }
         });
 
         // Initial check
-        this.updateActivity();
+        if (this.isWindowFocused) {
+            this.updateActivity();
+        } else {
+            // If starting unfocused, send Idle
+            this.statusUpdateCallback({
+                activity: 'Idle',
+                status: 'Away',
+                project: '',
+                language: ''
+            });
+        }
     }
 
     private updateActivityInternal(activityOverride?: string) {
+        // If window is not focused, don't send updates (already sent Idle on blur)
+        if (!this.isWindowFocused) {
+            return;
+        }
+
         const config = vscode.workspace.getConfiguration('vscode-social-presence');
         const shareProject = config.get<boolean>('shareProjectName', true);
         const shareLanguage = config.get<boolean>('shareLanguage', true);
@@ -53,25 +109,38 @@ export class ActivityTracker {
         if (editor) {
             const project = shareProject ? (vscode.workspace.name || 'No Project') : 'Hidden';
             const language = shareLanguage ? editor.document.languageId : 'Hidden';
-            const activity = shareActivity ? (activityOverride || 'Reading') : 'Hidden';
+
+            // Use override if provided, otherwise use current activity state
+            let activity = activityOverride || this.currentActivity;
+
+            // If no override and no explicit activity, default to Reading
+            if (!activityOverride && this.currentActivity === 'Idle') {
+                activity = 'Reading';
+            }
+
+            const finalActivity = shareActivity ? activity : 'Hidden';
 
             newStatus = {
                 project: project,
                 language: language,
-                activity: activity,
+                activity: finalActivity,
                 status: 'Online'
             };
         } else {
             newStatus = {
                 activity: shareActivity ? 'Idle' : 'Hidden',
-                status: 'Online'
+                status: 'Online',
+                project: '',
+                language: ''
             };
+            this.currentActivity = 'Idle';
         }
 
         // Only send if something actually changed
         const statusChanged = JSON.stringify(newStatus) !== JSON.stringify(this.lastSentStatus);
 
         if (statusChanged) {
+            console.log('Status changed, sending update:', newStatus);
             this.lastSentStatus = newStatus;
             this.statusUpdateCallback(newStatus);
         }
@@ -79,11 +148,14 @@ export class ActivityTracker {
         this.resetIdleTimer();
     }
 
-    private updateActivity(activityOverride?: string) {
+    private updateActivity(activityOverride?: string, forceImmediate: boolean = false) {
         const now = Date.now();
 
-        // Throttle: Only allow updates every 5 seconds
-        if (now - this.lastUpdateTime < this.updateThrottleMs) {
+        // For high-priority status changes (Coding, Debugging) or forced updates, send immediately
+        const isHighPriority = activityOverride === 'Coding' || activityOverride === 'Debugging' || forceImmediate;
+
+        // Throttle: Only allow updates every 5 seconds (except for high priority)
+        if (!isHighPriority && now - this.lastUpdateTime < this.updateThrottleMs) {
             // Schedule a delayed update if one isn't already pending
             if (!this.pendingUpdate) {
                 this.pendingUpdate = setTimeout(() => {
@@ -102,17 +174,25 @@ export class ActivityTracker {
         if (this.idleTimer) {
             clearTimeout(this.idleTimer);
         }
-        this.idleTimer = setTimeout(() => {
-            this.statusUpdateCallback({
-                activity: 'Idle',
-                status: 'Away'
-            });
-        }, this.idleTimeout);
+
+        // Only set idle timer if window is focused
+        if (this.isWindowFocused) {
+            this.idleTimer = setTimeout(() => {
+                this.currentActivity = 'Idle';
+                this.statusUpdateCallback({
+                    activity: 'Idle',
+                    status: 'Away'
+                });
+            }, this.idleTimeout);
+        }
     }
 
     public dispose() {
         if (this.idleTimer) {
             clearTimeout(this.idleTimer);
+        }
+        if (this.pendingUpdate) {
+            clearTimeout(this.pendingUpdate);
         }
     }
 }

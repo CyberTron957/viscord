@@ -16,17 +16,6 @@ A VS Code extension that shows your GitHub friends' real-time coding status! See
 - **All Users**: Browse all active users
 - **Offline Users**: See when friends were last active (up to 7 days)
 
-## 🚀 Deployment
-
-For production deployment instructions, including setting up secure WebSockets (`wss://`) with Caddy, please see [DEPLOYMENT.md](DEPLOYMENT.md).
-
-## 🔒 Security
-
-This extension communicates with a central server to exchange status information.
-- **Privacy**: You can control who sees your status (Everyone, Followers, Following, Close Friends, or Invisible).
-- **Data**: Only your current status, activity, and project details are sent. No code is transmitted.
-- **Encryption**: Use `wss://` in production to ensure all data is encrypted in transit.
-
 ### 🪟 Multiple Windows Support
 - **Smart Aggregation**: Open multiple VS Code windows with different projects
 - **Activity Priority**: Shows your most active status (Debugging > Coding > Reading > Idle)
@@ -107,7 +96,7 @@ Access settings via `Cmd+,` (Mac) or `Ctrl+,` (Windows/Linux) and search for "So
 
 ## 🖥️ Server Deployment
 
-The extension requires a WebSocket server. See [AZURE_DEPLOYMENT.md](./AZURE_DEPLOYMENT.md) for deployment instructions.
+The extension requires a WebSocket server. See [DEPLOYMENT.md](./DEPLOYMENT.md) for secure production deployment instructions using Caddy and HTTPS/WSS.
 
 ### Quick Local Setup
 ```bash
@@ -118,9 +107,10 @@ node server/index.js
 ```
 
 ### Production Deployment
-- Supports Azure VM, AWS EC2, Heroku, Railway, etc.
+- Supports any Linux server (Ubuntu recommended)
+- **Secure WSS** via Caddy reverse proxy
+- **Automatic SSL** with Let's Encrypt
 - Includes PM2 process management
-- Optional SSL/TLS with Nginx reverse proxy
 
 ## 📁 Project Structure
 

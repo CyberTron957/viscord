@@ -17,25 +17,8 @@ const rest_1 = require("@octokit/rest");
 const database_1 = require("./database");
 const rateLimiter_1 = require("./rateLimiter");
 const http_1 = __importDefault(require("http"));
-const https_1 = __importDefault(require("https"));
-const fs_1 = __importDefault(require("fs"));
 const PORT = parseInt(process.env.PORT || '8080');
-const MAX_MESSAGE_SIZE = 16 * 1024; // 16 KB limit for WebSocket messages
-// Create HTTP or HTTPS server based on environment
-let server;
-if (process.env.SSL_CERT_PATH && process.env.SSL_KEY_PATH) {
-    // Production: Use HTTPS
-    server = https_1.default.createServer({
-        cert: fs_1.default.readFileSync(process.env.SSL_CERT_PATH),
-        key: fs_1.default.readFileSync(process.env.SSL_KEY_PATH)
-    });
-    console.log('🔒 HTTPS server initialized (WSS enabled)');
-}
-else {
-    // Development: Use HTTP
-    server = http_1.default.createServer();
-    console.log('⚠️  HTTP server initialized (development mode - use reverse proxy for production)');
-}
+const server = http_1.default.createServer();
 const wss = new ws_1.WebSocketServer({ server });
 const clients = new Map();
 function validateGitHubToken(token) {
@@ -119,14 +102,13 @@ wss.on('connection', (ws, req) => {
     console.log(`Client connected from ${clientIp}`);
     ws.on('message', (message) => __awaiter(void 0, void 0, void 0, function* () {
         try {
-            // Security: Enforce message size limit
-            const messageStr = message.toString();
-            if (messageStr.length > MAX_MESSAGE_SIZE) {
-                console.warn(`Message size limit exceeded: ${messageStr.length} bytes`);
+            // Security: Enforce message size limit (16KB)
+            if (message.toString().length > 16 * 1024) {
+                console.warn(`Message too large from ${clientIp}`);
                 ws.close(1009, 'Message too large');
                 return;
             }
-            const data = JSON.parse(messageStr);
+            const data = JSON.parse(message.toString());
             const clientData = clients.get(ws);
             // Rate limiting: messages
             if (clientData && clientData.githubId) {

@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { WsClient, UserStatus } from './wsClient';
+import { WsClient, UserStatus, ConnectionStatus } from './wsClient';
 import { GitHubService, GitHubUser } from './githubService';
 
 export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
@@ -9,6 +9,9 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     private _onUsersUpdated: vscode.EventEmitter<UserStatus[]> = new vscode.EventEmitter<UserStatus[]>();
     readonly onUsersUpdated: vscode.Event<UserStatus[]> = this._onUsersUpdated.event;
 
+    private _onConnectionStatusChanged: vscode.EventEmitter<ConnectionStatus> = new vscode.EventEmitter<ConnectionStatus>();
+    readonly onConnectionStatusChanged: vscode.Event<ConnectionStatus> = this._onConnectionStatusChanged.event;
+
     private context: vscode.ExtensionContext;
     private profile: GitHubUser;
     private allUsers: UserStatus[] = [];
@@ -17,7 +20,9 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     private following: GitHubUser[];
     private githubService: GitHubService;
     private closeFriends: string[] = [];
-    private isGitHubConnected: boolean;
+    public isGitHubConnected: boolean;
+    private isAuthenticated: boolean;
+    private _connectionStatus: ConnectionStatus = 'disconnected';
 
     constructor(
         context: vscode.ExtensionContext,
@@ -25,7 +30,8 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         followers: GitHubUser[],
         following: GitHubUser[],
         githubService: GitHubService,
-        isGitHubConnected: boolean
+        isGitHubConnected: boolean,
+        isAuthenticated: boolean
     ) {
         this.context = context;
         this.profile = profile;
@@ -33,17 +39,42 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         this.following = following;
         this.githubService = githubService;
         this.isGitHubConnected = isGitHubConnected;
+        this.isAuthenticated = isAuthenticated;
         this.closeFriends = this.context.globalState.get<string[]>('closeFriends', []);
 
-        this.wsClient = new WsClient((users) => {
-            this.allUsers = users;
-            this._onUsersUpdated.fire(users);
-            this.refresh();
-        });
+        this.wsClient = new WsClient(
+            (users) => {
+                this.allUsers = users;
+                this._onUsersUpdated.fire(users);
+                this.refresh();
+            },
+            (status) => {
+                this._connectionStatus = status;
+                this._onConnectionStatusChanged.fire(status);
+                this.refresh();
+            }
+        );
 
         // Connect with username and optional token
         const token = this.isGitHubConnected ? githubService.getToken() : undefined;
-        this.wsClient.connect(profile.login, token);
+        if (this.isAuthenticated && profile.login) {
+            this.wsClient.connect(profile.login, token);
+        }
+    }
+
+    setAuthenticated(value: boolean) {
+        this.isAuthenticated = value;
+        this.refresh();
+    }
+
+    get connectionStatus(): ConnectionStatus {
+        return this._connectionStatus;
+    }
+
+    reconnect() {
+        if (this.isAuthenticated) {
+            this.wsClient.reconnect();
+        }
     }
 
     addCloseFriend(githubId: string) {
@@ -89,6 +120,11 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     getChildren(element?: TreeNode): Thenable<TreeNode[]> {
+        // If not authenticated, return empty array to show Welcome View
+        if (!this.isAuthenticated) {
+            return Promise.resolve([]);
+        }
+
         if (element) {
             // Return children of a category
             if (element instanceof Category) {
@@ -101,12 +137,16 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         }
     }
 
-    private getCategories(): Category[] {
+    private getCategories(): TreeNode[] {
         const closeFriendsCount = this.getCloseFriendsUsers().length;
-        // In the main view, we show Close Friends and Manual Connections (Guests)
-        return [
+        const categories: TreeNode[] = [
             new Category('Close Friends', vscode.TreeItemCollapsibleState.Expanded, closeFriendsCount)
         ];
+
+        // Add connection status indicator at the bottom
+        categories.push(new StatusIndicatorNode(this._connectionStatus));
+
+        return categories;
     }
 
     private getUsersForCategory(category: string): UserNode[] {
@@ -129,10 +169,18 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
 
         return users.map(u => {
             // Determine if manual connection
-            // If not connected to GitHub, everyone is manual
-            // If connected, check if user is NOT in followers/following
-            let isManual = !this.isGitHubConnected;
-            if (this.isGitHubConnected) {
+            // Manual connections are:
+            // 1. If not connected to GitHub, everyone is manual
+            // 2. If connected to GitHub, users NOT in followers/following (invite code connections)
+            // 3. Pinned close friends are NOT necessarily manual (they might be GitHub followers too)
+
+            let isManual = false;
+
+            if (!this.isGitHubConnected) {
+                // Guest mode: all connections are manual
+                isManual = true;
+            } else {
+                // GitHub mode: manual only if NOT in followers/following
                 const isFollower = this.followers.some(f => f.login.toLowerCase() === u.username.toLowerCase());
                 const isFollowing = this.following.some(f => f.login.toLowerCase() === u.username.toLowerCase());
                 isManual = !isFollower && !isFollowing;
@@ -154,7 +202,25 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
 
     private getCloseFriendsUsers(): UserStatus[] {
         const closeFriendsLower = this.closeFriends.map(f => f.toLowerCase());
-        return this.allUsers.filter(u => closeFriendsLower.includes(u.username.toLowerCase()));
+
+        return this.allUsers.filter(u => {
+            // Include if pinned as close friend
+            if (closeFriendsLower.includes(u.username.toLowerCase())) {
+                return true;
+            }
+
+            // Include if manual connection (not in followers/following)
+            // This includes users connected via invite codes
+            if (this.isGitHubConnected) {
+                const isFollower = this.followers.some(f => f.login.toLowerCase() === u.username.toLowerCase());
+                const isFollowing = this.following.some(f => f.login.toLowerCase() === u.username.toLowerCase());
+                const isManual = !isFollower && !isFollowing;
+                return isManual;
+            } else {
+                // If not connected to GitHub, all connections are manual
+                return true;
+            }
+        });
     }
 
     public updateStatus(status: Partial<UserStatus>) {
@@ -259,6 +325,11 @@ export class GitHubViewProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     getChildren(element?: TreeNode): Thenable<TreeNode[]> {
+        // If not connected to GitHub, return empty to show Welcome View
+        if (!this.sidebarProvider.isGitHubConnected) {
+            return Promise.resolve([]);
+        }
+
         if (element) {
             if (element instanceof Category) {
                 return Promise.resolve(this.getUsersForCategory(element.label));
@@ -311,7 +382,7 @@ export class GitHubViewProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 }
 
-type TreeNode = Category | UserNode;
+type TreeNode = Category | UserNode | StatusIndicatorNode;
 
 class Category extends vscode.TreeItem {
     constructor(
@@ -397,6 +468,44 @@ class UserNode extends vscode.TreeItem {
             // Grey Outline
             this.iconPath = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('charts.gray'));
         }
+    }
+}
+
+class StatusIndicatorNode extends vscode.TreeItem {
+    constructor(status: ConnectionStatus) {
+        let label: string;
+        let icon: vscode.ThemeIcon;
+        let tooltip: string;
+
+        switch (status) {
+            case 'connected':
+                label = 'Connected';
+                icon = new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
+                tooltip = 'Connected to server';
+                break;
+            case 'connecting':
+                label = 'Connecting...';
+                icon = new vscode.ThemeIcon('sync~spin', new vscode.ThemeColor('charts.yellow'));
+                tooltip = 'Connecting to server...';
+                break;
+            case 'error':
+                label = 'Connection Error';
+                icon = new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
+                tooltip = 'Failed to connect. Click refresh to retry.';
+                break;
+            case 'disconnected':
+            default:
+                label = 'Disconnected';
+                icon = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('charts.gray'));
+                tooltip = 'Not connected to server';
+                break;
+        }
+
+        super(label, vscode.TreeItemCollapsibleState.None);
+        this.iconPath = icon;
+        this.tooltip = tooltip;
+        this.contextValue = 'statusIndicator';
+        this.description = '';
     }
 }
 

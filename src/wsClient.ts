@@ -1,4 +1,5 @@
 import WebSocket from 'ws';
+import * as vscode from 'vscode';
 
 export interface UserStatus {
     username: string;
@@ -9,45 +10,84 @@ export interface UserStatus {
     lastSeen?: number;
 }
 
+export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
+
 export class WsClient {
     private ws: WebSocket | null = null;
     private onUserListUpdate: (users: UserStatus[]) => void;
+    private onConnectionStatusChange: (status: ConnectionStatus) => void;
     private username: string = '';
     private token: string | undefined;
     private reconnectAttempts = 0;
     private maxReconnectAttempts = 10;
     private reconnectTimeout: NodeJS.Timeout | null = null;
     private isIntentionallyClosed = false;
-    private lastSentStatus: string = ''; // Track last sent status to avoid duplicates
-    private sessionId: string; // Unique ID for this VS Code window
+    private lastSentStatus: string = '';
+    private sessionId: string;
+    private _connectionStatus: ConnectionStatus = 'disconnected';
 
-    constructor(onUserListUpdate: (users: UserStatus[]) => void) {
+    constructor(
+        onUserListUpdate: (users: UserStatus[]) => void,
+        onConnectionStatusChange?: (status: ConnectionStatus) => void
+    ) {
         this.onUserListUpdate = onUserListUpdate;
-        // Generate unique session ID for this window
+        this.onConnectionStatusChange = onConnectionStatusChange || (() => { });
         this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+    }
+
+    get connectionStatus(): ConnectionStatus {
+        return this._connectionStatus;
+    }
+
+    private setConnectionStatus(status: ConnectionStatus) {
+        this._connectionStatus = status;
+        this.onConnectionStatusChange(status);
     }
 
     connect(username: string, token?: string) {
         this.username = username;
         this.token = token;
         this.isIntentionallyClosed = false;
+        this.reconnectAttempts = 0;
+        this.attemptConnection();
+    }
+
+    reconnect() {
+        // Force a reconnection attempt
+        this.isIntentionallyClosed = false;
+        this.reconnectAttempts = 0;
+
+        if (this.ws) {
+            this.ws.close();
+            this.ws = null;
+        }
+
+        if (this.reconnectTimeout) {
+            clearTimeout(this.reconnectTimeout);
+            this.reconnectTimeout = null;
+        }
+
         this.attemptConnection();
     }
 
     private attemptConnection() {
-        try {
-            const vscode = require('vscode');
-            const config = vscode.workspace.getConfiguration('vscode-social-presence');
-            const serverUrl = config.get('serverUrl', 'ws://localhost:8080');
+        if (!this.username) {
+            console.warn('Cannot connect without username');
+            this.setConnectionStatus('error');
+            return;
+        }
 
-            console.log(`Connecting to ${serverUrl}...`);
-            this.ws = new WebSocket(serverUrl);
+        this.setConnectionStatus('connecting');
+
+        try {
+            this.ws = new WebSocket('ws://localhost:8080');
 
             this.ws.on('open', () => {
                 console.log('Connected to WebSocket server');
-                this.reconnectAttempts = 0; // Reset on successful connection
+                this.reconnectAttempts = 0;
+                this.setConnectionStatus('connected');
 
-                // Get visibility mode from VS Code settings
+                const config = vscode.workspace.getConfiguration('vscode-social-presence');
                 const visibilityMode = config.get('visibilityMode', 'everyone');
 
                 this.send({
@@ -65,11 +105,8 @@ export class WsClient {
                     if (message.type === 'userList') {
                         this.onUserListUpdate(message.users);
                     } else if (message.type === 'friendJoined') {
-                        // Handle friend joined notification
                         console.log('Friend joined:', message.user);
-                        // Notification removed as per user request
                     } else if (message.type === 'inviteCreated') {
-                        const vscode = require('vscode');
                         const inviteLink = `Invite Code: ${message.code}`;
                         vscode.window.showInformationMessage(
                             `${inviteLink} (expires in ${message.expiresIn})`,
@@ -81,7 +118,6 @@ export class WsClient {
                             }
                         });
                     } else if (message.type === 'inviteAccepted') {
-                        const vscode = require('vscode');
                         if (message.success) {
                             vscode.window.showInformationMessage(
                                 `Successfully connected with ${message.friendUsername}!`
@@ -99,18 +135,20 @@ export class WsClient {
 
             this.ws.on('error', (error) => {
                 console.error('WebSocket error:', error);
+                this.setConnectionStatus('error');
             });
 
             this.ws.on('close', (code, reason) => {
                 console.log(`Disconnected from WebSocket server (code: ${code}, reason: ${reason})`);
+                this.setConnectionStatus('disconnected');
 
-                // Only reconnect if not intentionally closed
                 if (!this.isIntentionallyClosed) {
                     this.scheduleReconnect();
                 }
             });
         } catch (error) {
             console.error('Failed to create WebSocket connection:', error);
+            this.setConnectionStatus('error');
             this.scheduleReconnect();
         }
     }
@@ -118,10 +156,10 @@ export class WsClient {
     private scheduleReconnect() {
         if (this.reconnectAttempts >= this.maxReconnectAttempts) {
             console.error('Max reconnection attempts reached. Giving up.');
+            this.setConnectionStatus('error');
             return;
         }
 
-        // Exponential backoff: 1s, 2s, 4s, 8s, 16s, 32s, 60s (max)
         const delay = Math.min(1000 * Math.pow(2, this.reconnectAttempts), 60000);
         this.reconnectAttempts++;
 
@@ -143,9 +181,8 @@ export class WsClient {
     updateStatus(status: Partial<UserStatus>) {
         const statusString = JSON.stringify(status);
 
-        // Only send if status has actually changed
         if (statusString === this.lastSentStatus) {
-            return; // Skip duplicate updates
+            return;
         }
 
         this.lastSentStatus = statusString;
@@ -168,5 +205,7 @@ export class WsClient {
             this.ws.close();
             this.ws = null;
         }
+
+        this.setConnectionStatus('disconnected');
     }
 }

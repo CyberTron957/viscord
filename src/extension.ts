@@ -74,7 +74,7 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(statusBarItem);
 
     // Initialize Providers
-    const sidebarProvider = new SidebarProvider(context, profile, followers, following, githubService, isGitHubConnected);
+    const sidebarProvider = new SidebarProvider(context, profile, followers, following, githubService, isGitHubConnected, authState !== null);
     const githubViewProvider = new GitHubViewProvider(sidebarProvider);
 
     // Register Views
@@ -91,6 +91,47 @@ export async function activate(context: vscode.ExtensionContext) {
         showCollapseAll: true
     });
     context.subscriptions.push(githubTreeView);
+
+    // ... (rest of code)
+
+    // Reset Extension - Full reset to fresh install state
+    vscode.commands.registerCommand('vscode-social-presence.resetExtension', async () => {
+        const confirm = await vscode.window.showWarningMessage(
+            'This will sign you out of GitHub, clear all local data, and return the extension to its initial state. Continue?',
+            { modal: true },
+            'Yes, Reset Everything'
+        );
+
+        if (confirm === 'Yes, Reset Everything') {
+            // Sign out of GitHub
+            await githubService.signOut();
+
+            // Clear all stored state
+            await context.globalState.update('authState', undefined);
+            await context.globalState.update('guestUsername', undefined);
+            await context.globalState.update('closeFriends', undefined);
+
+            // Reset context keys
+            vscode.commands.executeCommand('setContext', 'vscode-social-presence:authenticated', false);
+            vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', false);
+
+            // Disconnect WebSocket and update auth state
+            sidebarProvider.disconnect();
+            sidebarProvider.setAuthenticated(false);
+
+            // Hide status bar
+            statusBarItem.hide();
+
+            vscode.window.showInformationMessage(
+                'Extension reset complete. Please reload the window.',
+                'Reload Window'
+            ).then(selection => {
+                if (selection === 'Reload Window') {
+                    vscode.commands.executeCommand('workbench.action.reloadWindow');
+                }
+            });
+        }
+    });
 
     // 3. Explorer View
     const config = vscode.workspace.getConfiguration('vscode-social-presence');
@@ -213,6 +254,7 @@ export async function activate(context: vscode.ExtensionContext) {
         statusBarItem.text = `$(account) ${username} (Guest)`;
         statusBarItem.show();
 
+        sidebarProvider.setAuthenticated(true);
         sidebarProvider.reconnectAsGuest(username);
         vscode.window.showInformationMessage(`Connected as guest: ${username}`);
     });
@@ -233,6 +275,7 @@ export async function activate(context: vscode.ExtensionContext) {
             statusBarItem.text = `$(account) ${newProfile.login}`;
             statusBarItem.show();
 
+            sidebarProvider.setAuthenticated(true);
             sidebarProvider.connectGitHub(newProfile, newFollowers, newFollowing, guestUsername);
 
             // Refresh GitHub view
@@ -246,6 +289,8 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     vscode.commands.registerCommand('vscode-social-presence.refresh', () => {
+        // Refresh views and retry connection
+        sidebarProvider.reconnect();
         sidebarProvider.refresh();
         githubViewProvider.refresh();
     });
@@ -342,6 +387,53 @@ export async function activate(context: vscode.ExtensionContext) {
             await context.globalState.update('guestUsername', undefined);
             await context.globalState.update('closeFriends', undefined);
             vscode.window.showInformationMessage('Data cleared. Reload window.');
+        }
+    });
+
+    // Clear Cache - Refresh data without signing out
+    vscode.commands.registerCommand('vscode-social-presence.clearCache', async () => {
+        const confirm = await vscode.window.showInformationMessage(
+            'Clear cached data and refresh? Your authentication will be preserved.',
+            'Clear Cache',
+            'Cancel'
+        );
+
+        if (confirm === 'Clear Cache') {
+            // Clear close friends list (but keep auth)
+            await context.globalState.update('closeFriends', []);
+
+            // Reconnect WebSocket to get fresh data
+            sidebarProvider.reconnect();
+            sidebarProvider.refresh();
+            githubViewProvider.refresh();
+
+            vscode.window.showInformationMessage('Cache cleared and refreshed!');
+        }
+    });
+
+    // Reset Extension - Full reset to fresh install state
+
+
+    // Sign Out of GitHub (but keep guest data)
+    vscode.commands.registerCommand('vscode-social-presence.signOutGitHub', async () => {
+        const confirm = await vscode.window.showWarningMessage(
+            'Sign out of GitHub? You will switch to guest mode.',
+            'Sign Out',
+            'Cancel'
+        );
+
+        if (confirm === 'Sign Out') {
+            await githubService.signOut();
+            await context.globalState.update('authState', 'guest');
+            vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', false);
+
+            const guestUsername = context.globalState.get<string>('guestUsername') || 'Guest';
+            statusBarItem.text = `$(account) ${guestUsername} (Guest)`;
+
+            sidebarProvider.disconnectGitHub(guestUsername);
+            githubViewProvider.refresh();
+
+            vscode.window.showInformationMessage('Signed out of GitHub. Your manual connections are preserved.');
         }
     });
 }

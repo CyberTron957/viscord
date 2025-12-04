@@ -1,16 +1,26 @@
-# Caddyfile for VS Code Social Presence
+{
+    # Global options
+    email your-email@example.com
+}
 
 yourdomain.com {
-    # Reverse proxy to the Node.js WebSocket server
-    # We assume the Node app runs on localhost at the internal PORT (default 8080)
-    reverse_proxy localhost:8080
+    # Reverse proxy to the Node.js application
+    reverse_proxy localhost:8080 {
+        # Enable WebSocket support (enabled by default in Caddy v2, but explicit is good)
+        header_up Upgrade {http.request.header.Upgrade}
+        header_up Connection {http.request.header.Connection}
+    }
 
     # Security headers
     header {
-        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
-        X-Content-Type-Options "nosniff"
+        # Prevent clickjacking
         X-Frame-Options "DENY"
-        Referrer-Policy "strict-origin-when-cross-origin"
+        # Enable XSS protection
+        X-XSS-Protection "1; mode=block"
+        # Prevent MIME sniffing
+        X-Content-Type-Options "nosniff"
+        # HSTS (Strict Transport Security)
+        Strict-Transport-Security "max-age=31536000; includeSubDomains; preload"
     }
 
     # Logging

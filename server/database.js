@@ -6,8 +6,14 @@ Object.defineProperty(exports, "__esModule", { value: true });
 exports.dbService = exports.DatabaseService = void 0;
 const better_sqlite3_1 = __importDefault(require("better-sqlite3"));
 const path_1 = __importDefault(require("path"));
+const fs_1 = __importDefault(require("fs"));
 const dbPath = process.env.DB_PATH || path_1.default.join(__dirname, '../database.sqlite');
+const backupDir = process.env.BACKUP_DIR || path_1.default.join(__dirname, '../backups');
 const db = new better_sqlite3_1.default(dbPath);
+// Ensure backup directory exists
+if (!fs_1.default.existsSync(backupDir)) {
+    fs_1.default.mkdirSync(backupDir, { recursive: true });
+}
 // Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');
 // Create tables
@@ -207,9 +213,8 @@ class DatabaseService {
     }
     // Invite Codes
     createInviteCode(creatorUsername, expiresInHours = 48) {
-        // Generate cryptographically secure code (6 chars)
-        const crypto = require('crypto');
-        const code = crypto.randomBytes(4).toString('hex').toUpperCase().substring(0, 6);
+        // Generate unique code (6 chars: letters + numbers)
+        const code = Math.random().toString(36).substring(2, 8).toUpperCase();
         const now = Date.now();
         const expiresAt = now + (expiresInHours * 60 * 60 * 1000);
         const stmt = db.prepare(`
@@ -300,9 +305,109 @@ class DatabaseService {
         }
         return username;
     }
+    // --- Backup System ---
+    // Create a backup of the database
+    backup() {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupPath = path_1.default.join(backupDir, `database-${timestamp}.sqlite`);
+        try {
+            // Use better-sqlite3's backup API for safe backup
+            db.backup(backupPath);
+            console.log(`Database backed up to: ${backupPath}`);
+            // Clean up old backups (keep last 5)
+            this.cleanupOldBackups(5);
+            return backupPath;
+        }
+        catch (error) {
+            console.error('Backup failed:', error);
+            throw error;
+        }
+    }
+    // Clean up old backups, keeping the most recent N
+    cleanupOldBackups(keepCount) {
+        try {
+            const files = fs_1.default.readdirSync(backupDir)
+                .filter(f => f.startsWith('database-') && f.endsWith('.sqlite'))
+                .map(f => ({
+                name: f,
+                path: path_1.default.join(backupDir, f),
+                mtime: fs_1.default.statSync(path_1.default.join(backupDir, f)).mtime
+            }))
+                .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+            // Remove files beyond keepCount
+            for (let i = keepCount; i < files.length; i++) {
+                fs_1.default.unlinkSync(files[i].path);
+                console.log(`Removed old backup: ${files[i].name}`);
+            }
+        }
+        catch (error) {
+            console.error('Backup cleanup failed:', error);
+        }
+    }
+    // Restore from a backup (returns true if successful)
+    restore(backupPath) {
+        try {
+            if (!fs_1.default.existsSync(backupPath)) {
+                console.error(`Backup file not found: ${backupPath}`);
+                return false;
+            }
+            // Close current connection
+            db.close();
+            // Copy backup over current database
+            fs_1.default.copyFileSync(backupPath, dbPath);
+            console.log(`Database restored from: ${backupPath}`);
+            return true;
+        }
+        catch (error) {
+            console.error('Restore failed:', error);
+            return false;
+        }
+    }
+    // List available backups
+    listBackups() {
+        try {
+            return fs_1.default.readdirSync(backupDir)
+                .filter(f => f.startsWith('database-') && f.endsWith('.sqlite'))
+                .map(f => ({
+                name: f,
+                path: path_1.default.join(backupDir, f),
+                date: fs_1.default.statSync(path_1.default.join(backupDir, f)).mtime
+            }))
+                .sort((a, b) => b.date.getTime() - a.date.getTime());
+        }
+        catch (error) {
+            console.error('Failed to list backups:', error);
+            return [];
+        }
+    }
     close() {
         db.close();
     }
 }
 exports.DatabaseService = DatabaseService;
 exports.dbService = new DatabaseService();
+// --- Auto-Backup System ---
+// Backup every 6 hours in production
+const BACKUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+if (process.env.NODE_ENV === 'production') {
+    // Initial backup on startup
+    setTimeout(() => {
+        try {
+            exports.dbService.backup();
+            console.log('Startup backup complete');
+        }
+        catch (error) {
+            console.error('Startup backup failed:', error);
+        }
+    }, 5000); // Wait 5 seconds after startup
+    // Schedule periodic backups
+    setInterval(() => {
+        try {
+            exports.dbService.backup();
+            console.log('Scheduled backup complete');
+        }
+        catch (error) {
+            console.error('Scheduled backup failed:', error);
+        }
+    }, BACKUP_INTERVAL);
+}

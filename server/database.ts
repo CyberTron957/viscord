@@ -1,8 +1,15 @@
 import Database from 'better-sqlite3';
 import path from 'path';
+import fs from 'fs';
 
 const dbPath = process.env.DB_PATH || path.join(__dirname, '../database.sqlite');
+const backupDir = process.env.BACKUP_DIR || path.join(__dirname, '../backups');
 const db = new Database(dbPath);
+
+// Ensure backup directory exists
+if (!fs.existsSync(backupDir)) {
+    fs.mkdirSync(backupDir, { recursive: true });
+}
 
 // Enable WAL mode for better concurrency
 db.pragma('journal_mode = WAL');
@@ -356,9 +363,119 @@ export class DatabaseService {
         return username;
     }
 
+    // --- Backup System ---
+
+    // Create a backup of the database
+    backup(): string {
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        const backupPath = path.join(backupDir, `database-${timestamp}.sqlite`);
+
+        try {
+            // Use better-sqlite3's backup API for safe backup
+            db.backup(backupPath);
+            console.log(`Database backed up to: ${backupPath}`);
+
+            // Clean up old backups (keep last 5)
+            this.cleanupOldBackups(5);
+
+            return backupPath;
+        } catch (error) {
+            console.error('Backup failed:', error);
+            throw error;
+        }
+    }
+
+    // Clean up old backups, keeping the most recent N
+    private cleanupOldBackups(keepCount: number): void {
+        try {
+            const files = fs.readdirSync(backupDir)
+                .filter(f => f.startsWith('database-') && f.endsWith('.sqlite'))
+                .map(f => ({
+                    name: f,
+                    path: path.join(backupDir, f),
+                    mtime: fs.statSync(path.join(backupDir, f)).mtime
+                }))
+                .sort((a, b) => b.mtime.getTime() - a.mtime.getTime());
+
+            // Remove files beyond keepCount
+            for (let i = keepCount; i < files.length; i++) {
+                fs.unlinkSync(files[i].path);
+                console.log(`Removed old backup: ${files[i].name}`);
+            }
+        } catch (error) {
+            console.error('Backup cleanup failed:', error);
+        }
+    }
+
+    // Restore from a backup (returns true if successful)
+    restore(backupPath: string): boolean {
+        try {
+            if (!fs.existsSync(backupPath)) {
+                console.error(`Backup file not found: ${backupPath}`);
+                return false;
+            }
+
+            // Close current connection
+            db.close();
+
+            // Copy backup over current database
+            fs.copyFileSync(backupPath, dbPath);
+
+            console.log(`Database restored from: ${backupPath}`);
+            return true;
+        } catch (error) {
+            console.error('Restore failed:', error);
+            return false;
+        }
+    }
+
+    // List available backups
+    listBackups(): { name: string; path: string; date: Date }[] {
+        try {
+            return fs.readdirSync(backupDir)
+                .filter(f => f.startsWith('database-') && f.endsWith('.sqlite'))
+                .map(f => ({
+                    name: f,
+                    path: path.join(backupDir, f),
+                    date: fs.statSync(path.join(backupDir, f)).mtime
+                }))
+                .sort((a, b) => b.date.getTime() - a.date.getTime());
+        } catch (error) {
+            console.error('Failed to list backups:', error);
+            return [];
+        }
+    }
+
     close(): void {
         db.close();
     }
 }
 
 export const dbService = new DatabaseService();
+
+// --- Auto-Backup System ---
+// Backup every 6 hours in production
+const BACKUP_INTERVAL = 6 * 60 * 60 * 1000; // 6 hours
+
+if (process.env.NODE_ENV === 'production') {
+    // Initial backup on startup
+    setTimeout(() => {
+        try {
+            dbService.backup();
+            console.log('Startup backup complete');
+        } catch (error) {
+            console.error('Startup backup failed:', error);
+        }
+    }, 5000); // Wait 5 seconds after startup
+
+    // Schedule periodic backups
+    setInterval(() => {
+        try {
+            dbService.backup();
+            console.log('Scheduled backup complete');
+        } catch (error) {
+            console.error('Scheduled backup failed:', error);
+        }
+    }, BACKUP_INTERVAL);
+}
+

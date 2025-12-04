@@ -71,6 +71,21 @@
         "command": "vscode-social-presence.continueAsGuest",
         "title": "Continue as Guest",
         "icon": "$(account)"
+      },
+      {
+        "command": "vscode-social-presence.resetExtension",
+        "title": "Reset Extension",
+        "icon": "$(clear-all)"
+      },
+      {
+        "command": "vscode-social-presence.signOutGitHub",
+        "title": "Sign Out of GitHub",
+        "icon": "$(sign-out)"
+      },
+      {
+        "command": "vscode-social-presence.clearCache",
+        "title": "Clear Cache",
+        "icon": "$(clear-all)"
       }
     ],
     "menus": {
@@ -96,7 +111,7 @@
           "group": "navigation"
         },
         {
-          "command": "vscode-social-presence.logout",
+          "command": "vscode-social-presence.signOutGitHub",
           "when": "view == social-presence-github && vscode-social-presence:githubConnected",
           "group": "navigation"
         }
@@ -210,12 +225,15 @@
         "vscode-social-presence.showBadge": {
           "type": "boolean",
           "default": true,
-          "description": "Show a badge count on the activity bar icon."
+          "description": "Show online count badge on the Social Presence icon."
         },
-        "vscode-social-presence.serverUrl": {
-          "type": "string",
-          "default": "ws://localhost:8080",
-          "description": "WebSocket server URL (e.g., wss://your-server.com)"
+        "vscode-social-presence.clearCache": {
+          "type": "null",
+          "markdownDescription": "**[Clear Cache](command:vscode-social-presence.clearCache)** - Clear cached data and refresh connections without signing out."
+        },
+        "vscode-social-presence.resetExtension": {
+          "type": "null",
+          "markdownDescription": "**[Reset Extension](command:vscode-social-presence.resetExtension)** - Clear all data and return to initial state. Use this if you're experiencing issues."
         }
       }
     }

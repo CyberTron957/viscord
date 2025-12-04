@@ -6,10 +6,7 @@ import http from 'http';
 
 const PORT = parseInt(process.env.PORT || '8080');
 const server = http.createServer();
-const wss = new WebSocketServer({
-    server,
-    maxPayload: 16 * 1024 // 16KB limit per message
-});
+const wss = new WebSocketServer({ server });
 
 interface ClientData {
     sessionId: string;  // Unique per window
@@ -129,6 +126,13 @@ wss.on('connection', (ws, req) => {
 
     ws.on('message', async (message) => {
         try {
+            // Security: Enforce message size limit (16KB)
+            if (message.toString().length > 16 * 1024) {
+                console.warn(`Message too large from ${clientIp}`);
+                ws.close(1009, 'Message too large');
+                return;
+            }
+
             const data = JSON.parse(message.toString());
             const clientData = clients.get(ws);
 
