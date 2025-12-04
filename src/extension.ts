@@ -77,6 +77,78 @@ export async function activate(context: vscode.ExtensionContext) {
     const sidebarProvider = new SidebarProvider(context, profile, followers, following, githubService, isGitHubConnected, authState !== null);
     const githubViewProvider = new GitHubViewProvider(sidebarProvider);
 
+    // *** CRITICAL: Register welcome view commands IMMEDIATELY after providers are initialized ***
+    // This ensures the commands are available when the welcome view buttons render in packed extensions
+    // Continue as Guest Command
+    context.subscriptions.push(vscode.commands.registerCommand('vscode-social-presence.continueAsGuest', async () => {
+        let username = context.globalState.get<string>('guestUsername') || '';
+
+        if (!username) {
+            const input = await vscode.window.showInputBox({
+                prompt: 'Enter a username to continue as guest',
+                placeHolder: 'GuestUser123',
+                validateInput: (value) => {
+                    if (!value || value.length < 3) return 'Username must be at least 3 characters';
+                    if (!/^[a-zA-Z0-9_-]+$/.test(value)) return 'Username can only contain letters, numbers, hyphens, and underscores';
+                    return null;
+                }
+            });
+
+            if (!input) return;
+            username = input;
+            await context.globalState.update('guestUsername', username);
+        }
+
+        // Update state
+        await context.globalState.update('authState', 'guest');
+        vscode.commands.executeCommand('setContext', 'vscode-social-presence:authenticated', true);
+        vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', false);
+
+        // Update profile and reconnect
+        const guestProfile = {
+            login: username,
+            avatar_url: 'https://avatars.githubusercontent.com/u/0?s=200&v=4',
+            html_url: ''
+        };
+
+        statusBarItem.text = `$(account) ${username} (Guest)`;
+        statusBarItem.show();
+
+        sidebarProvider.setAuthenticated(true);
+        sidebarProvider.reconnectAsGuest(username);
+        vscode.window.showInformationMessage(`Connected as guest: ${username}`);
+    }));
+
+    // Connect GitHub Command
+    context.subscriptions.push(vscode.commands.registerCommand('vscode-social-presence.connectGitHub', async () => {
+        try {
+            const session = await githubService.authenticate();
+            const newProfile = await githubService.getProfile();
+            const newFollowers = await githubService.getFollowers();
+            const newFollowing = await githubService.getFollowing();
+            const guestUsername = context.globalState.get<string>('guestUsername');
+
+            await context.globalState.update('authState', 'github');
+            vscode.commands.executeCommand('setContext', 'vscode-social-presence:authenticated', true);
+            vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', true);
+
+            statusBarItem.text = `$(account) ${newProfile.login}`;
+            statusBarItem.show();
+
+            sidebarProvider.setAuthenticated(true);
+            sidebarProvider.connectGitHub(newProfile, newFollowers, newFollowing, guestUsername);
+
+            // Refresh GitHub view
+            githubViewProvider.refresh();
+
+            vscode.window.showInformationMessage(`Connected to GitHub as ${newProfile.login}`);
+        } catch (error) {
+            vscode.window.showErrorMessage('Failed to connect to GitHub');
+            console.error('GitHub connection failed:', error);
+        }
+    }));
+
+
     // Register Views
     // 1. Close Friends & Guests View
     const friendsTreeView = vscode.window.createTreeView('social-presence-friends', {
@@ -277,74 +349,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // --- Commands ---
 
-    // Continue as Guest
-    vscode.commands.registerCommand('vscode-social-presence.continueAsGuest', async () => {
-        let username = context.globalState.get<string>('guestUsername') || '';
+    // Continue as Guest - ALREADY REGISTERED ABOVE (near line 83)
 
-        if (!username) {
-            const input = await vscode.window.showInputBox({
-                prompt: 'Enter a username to continue as guest',
-                placeHolder: 'GuestUser123',
-                validateInput: (value) => {
-                    if (!value || value.length < 3) return 'Username must be at least 3 characters';
-                    if (!/^[a-zA-Z0-9_-]+$/.test(value)) return 'Username can only contain letters, numbers, hyphens, and underscores';
-                    return null;
-                }
-            });
 
-            if (!input) return;
-            username = input;
-            await context.globalState.update('guestUsername', username);
-        }
 
-        // Update state
-        await context.globalState.update('authState', 'guest');
-        vscode.commands.executeCommand('setContext', 'vscode-social-presence:authenticated', true);
-        vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', false);
-
-        // Update profile and reconnect
-        const guestProfile = {
-            login: username,
-            avatar_url: 'https://avatars.githubusercontent.com/u/0?s=200&v=4',
-            html_url: ''
-        };
-
-        statusBarItem.text = `$(account) ${username} (Guest)`;
-        statusBarItem.show();
-
-        sidebarProvider.setAuthenticated(true);
-        sidebarProvider.reconnectAsGuest(username);
-        vscode.window.showInformationMessage(`Connected as guest: ${username}`);
-    });
-
-    // Connect GitHub
-    vscode.commands.registerCommand('vscode-social-presence.connectGitHub', async () => {
-        try {
-            const session = await githubService.authenticate();
-            const newProfile = await githubService.getProfile();
-            const newFollowers = await githubService.getFollowers();
-            const newFollowing = await githubService.getFollowing();
-            const guestUsername = context.globalState.get<string>('guestUsername');
-
-            await context.globalState.update('authState', 'github');
-            vscode.commands.executeCommand('setContext', 'vscode-social-presence:authenticated', true);
-            vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', true);
-
-            statusBarItem.text = `$(account) ${newProfile.login}`;
-            statusBarItem.show();
-
-            sidebarProvider.setAuthenticated(true);
-            sidebarProvider.connectGitHub(newProfile, newFollowers, newFollowing, guestUsername);
-
-            // Refresh GitHub view
-            githubViewProvider.refresh();
-
-            vscode.window.showInformationMessage(`Connected to GitHub as ${newProfile.login}`);
-        } catch (error) {
-            vscode.window.showErrorMessage('Failed to connect to GitHub');
-            console.error('GitHub connection failed:', error);
-        }
-    });
+    // Connect GitHub - ALREADY REGISTERED ABOVE (near line 123)
 
     vscode.commands.registerCommand('vscode-social-presence.refresh', () => {
         // Refresh views and retry connection

@@ -38,8 +38,17 @@
   "categories": [
     "Other"
   ],
-  "activationEvents": [],
-  "main": "./out/extension.js",
+  "activationEvents": [
+    "onView:social-presence-friends",
+    "onView:social-presence-github",
+    "onView:social-presence-status",
+    "onView:social-presence-explorer",
+    "onCommand:vscode-social-presence.continueAsGuest",
+    "onCommand:vscode-social-presence.connectGitHub",
+    "onCommand:vscode-social-presence.openSettings",
+    "onCommand:vscode-social-presence.createInvite"
+  ],
+  "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
@@ -283,7 +292,10 @@
     }
   },
   "scripts": {
-    "vscode:prepublish": "npm run compile",
+    "vscode:prepublish": "npm run esbuild-base -- --minify",
+    "esbuild-base": "esbuild ./src/extension.ts --bundle --outfile=dist/extension.js --external:vscode --format=cjs --platform=node",
+    "esbuild": "npm run esbuild-base -- --sourcemap",
+    "esbuild-watch": "npm run esbuild-base -- --sourcemap --watch",
     "compile": "tsc -p ./",
     "compile:server": "tsc server/*.ts --outDir server --module commonjs --target es6 --esModuleInterop --skipLibCheck",
     "watch": "tsc -watch -p ./",
@@ -303,6 +315,7 @@
     "@typescript-eslint/eslint-plugin": "^5.59.8",
     "@typescript-eslint/parser": "^5.59.8",
     "@vscode/test-electron": "^2.3.2",
+    "esbuild": "^0.27.1",
     "eslint": "^8.41.0",
     "glob": "^8.1.0",
     "jest": "^30.2.0",

@@ -20,3 +20,5 @@ backups/**
 logs/**
 *.log
 .DS_Store
+out/**
+!dist/**
