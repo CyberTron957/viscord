@@ -185,6 +185,18 @@
           "default": "",
           "description": "Your username for Social Presence."
         },
+        "vscode-social-presence.visibilityMode": {
+          "type": "string",
+          "enum": [
+            "everyone",
+            "followers",
+            "following",
+            "close-friends",
+            "invisible"
+          ],
+          "default": "everyone",
+          "description": "Control who can see your online status and activity."
+        },
         "vscode-social-presence.shareProjectName": {
           "type": "boolean",
           "default": true,
@@ -199,18 +211,6 @@
           "type": "boolean",
           "default": true,
           "description": "Share your current activity (Coding, Debugging, Idle)."
-        },
-        "vscode-social-presence.visibilityMode": {
-          "type": "string",
-          "enum": [
-            "everyone",
-            "followers",
-            "following",
-            "close-friends",
-            "invisible"
-          ],
-          "default": "everyone",
-          "description": "Control who can see your online status and activity."
         },
         "vscode-social-presence.showInStatusBar": {
           "type": "boolean",

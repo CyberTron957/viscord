@@ -339,11 +339,15 @@ wss.on('connection', (ws, req) => {
     ws.on('close', () => {
         const clientData = clients.get(ws);
         if (clientData && clientData.githubId) {
-            // Schedule batched write instead of immediate
-            scheduleLastSeenUpdate(clientData.githubId);
+            // Write last_seen IMMEDIATELY on disconnect so user shows as offline right away
+            // Don't batch this - we need it for the broadcast that happens next
+            dbService.updateLastSeen(clientData.githubId);
             console.log(`User ${clientData.username} disconnected`);
         }
         clients.delete(ws);
+
+        // Broadcast immediately (debounced to 2 seconds)
+        // This will now include the user as offline since last_seen was just updated
         scheduleBroadcast();
     });
 

@@ -3,6 +3,7 @@ module.exports = {
         name: 'vscode-social-presence',
         script: './server/index.js',
         instances: 1,
+        exec_mode: 'fork',  // ← Should be 'fork', not 'cluster'
         autorestart: true,
         watch: false,
         max_memory_restart: '500M',
