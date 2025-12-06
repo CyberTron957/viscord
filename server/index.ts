@@ -123,7 +123,12 @@ function filterUserData(clientData: ClientData): any {
 
 
 wss.on('connection', (ws, req) => {
-    const clientIp = req.socket.remoteAddress || 'unknown';
+    // Get real client IP from X-Forwarded-For header (when behind proxy like Caddy/nginx)
+    // Falls back to direct socket IP if not proxied
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const clientIp = typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0].trim()
+        : (req.socket.remoteAddress || 'unknown');
 
     // Rate limiting: connection attempts
     if (!rateLimiter.checkConnectionLimit(clientIp)) {
@@ -700,7 +705,7 @@ function broadcastUpdate() {
 const HEARTBEAT_INTERVAL = 30000; // Send ping every 30 seconds
 const HEARTBEAT_TIMEOUT = 10000;  // Consider dead if no response in 10 seconds
 
-const heartbeatInterval = setInterval(() => {
+const heartbeatInterval: ReturnType<typeof setInterval> = setInterval(() => {
     const now = Date.now();
 
     for (const [ws, clientData] of clients.entries()) {
@@ -752,7 +757,7 @@ startServer().catch(err => {
 // Graceful shutdown handler
 async function gracefulShutdown(signal: string) {
     console.log(`${signal} received, closing server...`);
-    clearInterval(heartbeatInterval);
+    clearInterval(heartbeatInterval as NodeJS.Timeout);
     await redisService.disconnect();
     wss.close(() => {
         dbService.close();

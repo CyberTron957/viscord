@@ -96,7 +96,12 @@ function filterUserData(clientData) {
     return filtered;
 }
 wss.on('connection', (ws, req) => {
-    const clientIp = req.socket.remoteAddress || 'unknown';
+    // Get real client IP from X-Forwarded-For header (when behind proxy like Caddy/nginx)
+    // Falls back to direct socket IP if not proxied
+    const forwardedFor = req.headers['x-forwarded-for'];
+    const clientIp = typeof forwardedFor === 'string'
+        ? forwardedFor.split(',')[0].trim()
+        : (req.socket.remoteAddress || 'unknown');
     // Rate limiting: connection attempts
     if (!rateLimiter_1.rateLimiter.checkConnectionLimit(clientIp)) {
         ws.close(1008, 'Rate limit exceeded');

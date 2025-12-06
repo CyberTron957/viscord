@@ -320,7 +320,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
             // Handle visibility mode changes
             if (e.affectsConfiguration('vscode-viscord.visibilityMode')) {
-                const visibilityMode = config.get<string>('visibilityMode', 'followers');
+                const visibilityMode = config.get<string>('visibilityMode', 'everyone');
                 sidebarProvider.sendMessage({
                     type: 'updatePreferences',
                     preferences: { visibility_mode: visibilityMode }

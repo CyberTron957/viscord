@@ -9,6 +9,9 @@ yourdomain.com {
         # Enable WebSocket support (enabled by default in Caddy v2, but explicit is good)
         header_up Upgrade {http.request.header.Upgrade}
         header_up Connection {http.request.header.Connection}
+        # Forward real client IP for proper rate limiting
+        header_up X-Forwarded-For {remote_host}
+        header_up X-Real-IP {remote_host}
     }
 
     # Security headers
