@@ -16,6 +16,10 @@ ecosystem.config.js
 Caddyfile
 DEPLOYMENT.md
 database.sqlite
+database.sqlite-shm
+database.sqlite-wal
+*.rdb
+dump.rdb
 backups/**
 logs/**
 *.log

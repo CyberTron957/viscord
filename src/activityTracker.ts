@@ -55,11 +55,13 @@ export class ActivityTracker {
                     if (!this.isWindowFocused) {
                         console.log('Idle timer expired - sending Idle status');
                         this.currentActivity = 'Idle';
+                        // Don't clear project/language - let the server aggregate 
+                        // from other windows. Just report this window as Idle.
                         this.statusUpdateCallback({
                             activity: 'Idle',
-                            status: 'Away',
-                            project: '',
-                            language: ''
+                            status: 'Away'
+                            // Keep project/language so server can still use them
+                            // if this is the user's only active window
                         });
                     }
                 }, this.FOCUS_LOST_DELAY);
@@ -103,12 +105,11 @@ export class ActivityTracker {
         if (this.isWindowFocused) {
             this.updateActivity();
         } else {
-            // If starting unfocused, send Idle
+            // If starting unfocused, send Idle but don't clear project/language
+            // Another window might be active with valid data
             this.statusUpdateCallback({
                 activity: 'Idle',
-                status: 'Away',
-                project: '',
-                language: ''
+                status: 'Away'
             });
         }
     }
