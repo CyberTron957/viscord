@@ -97,7 +97,7 @@ export class ActivityTracker {
             return;
         }
 
-        const config = vscode.workspace.getConfiguration('vscode-social-presence');
+        const config = vscode.workspace.getConfiguration('vscode-viscord');
         const shareProject = config.get<boolean>('shareProjectName', true);
         const shareLanguage = config.get<boolean>('shareLanguage', true);
         const shareActivity = config.get<boolean>('shareActivity', true);

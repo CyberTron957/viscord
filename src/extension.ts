@@ -5,7 +5,7 @@ import { ActivityTracker } from './activityTracker';
 import { GitHubService } from './githubService';
 
 export async function activate(context: vscode.ExtensionContext) {
-    console.log('VS Code Social Presence extension is activating');
+    console.log('VS Code viscord extension is activating');
 
     const githubService = new GitHubService();
     let profile: any = null;
@@ -58,8 +58,8 @@ export async function activate(context: vscode.ExtensionContext) {
     }
 
     // Set context keys
-    vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', isGitHubConnected);
-    vscode.commands.executeCommand('setContext', 'vscode-social-presence:authenticated', authState !== null);
+    vscode.commands.executeCommand('setContext', 'vscode-viscord:githubConnected', isGitHubConnected);
+    vscode.commands.executeCommand('setContext', 'vscode-viscord:authenticated', authState !== null);
 
     // Create Status Bar Item
     const statusBarItem = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Left, 100);
@@ -68,7 +68,7 @@ export async function activate(context: vscode.ExtensionContext) {
             ? `$(account) ${profile.login}`
             : `$(account) ${profile.login} (Guest)`;
         statusBarItem.tooltip = 'Click to copy username';
-        statusBarItem.command = 'vscode-social-presence.copyUsername';
+        statusBarItem.command = 'vscode-viscord.copyUsername';
         statusBarItem.show();
     }
     context.subscriptions.push(statusBarItem);
@@ -80,7 +80,7 @@ export async function activate(context: vscode.ExtensionContext) {
     // *** CRITICAL: Register welcome view commands IMMEDIATELY after providers are initialized ***
     // This ensures the commands are available when the welcome view buttons render in packed extensions
     // Continue as Guest Command
-    context.subscriptions.push(vscode.commands.registerCommand('vscode-social-presence.continueAsGuest', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('vscode-viscord.continueAsGuest', async () => {
         let username = context.globalState.get<string>('guestUsername') || '';
 
         if (!username) {
@@ -101,8 +101,8 @@ export async function activate(context: vscode.ExtensionContext) {
 
         // Update state
         await context.globalState.update('authState', 'guest');
-        vscode.commands.executeCommand('setContext', 'vscode-social-presence:authenticated', true);
-        vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', false);
+        vscode.commands.executeCommand('setContext', 'vscode-viscord:authenticated', true);
+        vscode.commands.executeCommand('setContext', 'vscode-viscord:githubConnected', false);
 
         // Update profile and reconnect
         const guestProfile = {
@@ -120,7 +120,7 @@ export async function activate(context: vscode.ExtensionContext) {
     }));
 
     // Connect GitHub Command
-    context.subscriptions.push(vscode.commands.registerCommand('vscode-social-presence.connectGitHub', async () => {
+    context.subscriptions.push(vscode.commands.registerCommand('vscode-viscord.connectGitHub', async () => {
         try {
             const session = await githubService.authenticate();
             const newProfile = await githubService.getProfile();
@@ -129,8 +129,8 @@ export async function activate(context: vscode.ExtensionContext) {
             const guestUsername = context.globalState.get<string>('guestUsername');
 
             await context.globalState.update('authState', 'github');
-            vscode.commands.executeCommand('setContext', 'vscode-social-presence:authenticated', true);
-            vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', true);
+            vscode.commands.executeCommand('setContext', 'vscode-viscord:authenticated', true);
+            vscode.commands.executeCommand('setContext', 'vscode-viscord:githubConnected', true);
 
             statusBarItem.text = `$(account) ${newProfile.login}`;
             statusBarItem.show();
@@ -151,14 +151,14 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Register Views
     // 1. Close Friends & Guests View
-    const friendsTreeView = vscode.window.createTreeView('social-presence-friends', {
+    const friendsTreeView = vscode.window.createTreeView('viscord-friends', {
         treeDataProvider: sidebarProvider,
         showCollapseAll: true
     });
     context.subscriptions.push(friendsTreeView);
 
     // 2. GitHub Network View
-    const githubTreeView = vscode.window.createTreeView('social-presence-github', {
+    const githubTreeView = vscode.window.createTreeView('viscord-github', {
         treeDataProvider: githubViewProvider,
         showCollapseAll: true
     });
@@ -209,7 +209,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     };
 
-    const statusTreeView = vscode.window.createTreeView('social-presence-status', {
+    const statusTreeView = vscode.window.createTreeView('viscord-status', {
         treeDataProvider: statusProvider
     });
     context.subscriptions.push(statusTreeView);
@@ -218,13 +218,13 @@ export async function activate(context: vscode.ExtensionContext) {
     sidebarProvider.onConnectionStatusChanged(() => {
         (statusProvider as any)._onDidChangeTreeData?.fire();
         // Trigger refresh by recreating the tree
-        vscode.commands.executeCommand('setContext', 'vscode-social-presence:statusChanged', Date.now());
+        vscode.commands.executeCommand('setContext', 'vscode-viscord:statusChanged', Date.now());
     });
 
     // ... (rest of code)
 
     // Reset Extension - Full reset to fresh install state
-    vscode.commands.registerCommand('vscode-social-presence.resetExtension', async () => {
+    vscode.commands.registerCommand('vscode-viscord.resetExtension', async () => {
         const confirm = await vscode.window.showWarningMessage(
             'This will sign you out of GitHub, clear all local data, and return the extension to its initial state. Continue?',
             { modal: true },
@@ -241,8 +241,8 @@ export async function activate(context: vscode.ExtensionContext) {
             await context.globalState.update('closeFriends', undefined);
 
             // Reset context keys
-            vscode.commands.executeCommand('setContext', 'vscode-social-presence:authenticated', false);
-            vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', false);
+            vscode.commands.executeCommand('setContext', 'vscode-viscord:authenticated', false);
+            vscode.commands.executeCommand('setContext', 'vscode-viscord:githubConnected', false);
 
             // Disconnect WebSocket and update auth state
             sidebarProvider.disconnect();
@@ -263,17 +263,17 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     // 3. Explorer View
-    const config = vscode.workspace.getConfiguration('vscode-social-presence');
+    const config = vscode.workspace.getConfiguration('vscode-viscord');
     const explorerProvider = new ExplorerPresenceProvider();
 
     if (config.get('showInExplorer', true)) {
-        vscode.window.registerTreeDataProvider('social-presence-explorer', explorerProvider);
+        vscode.window.registerTreeDataProvider('viscord-explorer', explorerProvider);
     }
 
     // Create status bar item for online friends count
     const onlineFriendsStatusBar = vscode.window.createStatusBarItem(vscode.StatusBarAlignment.Right, 99);
-    onlineFriendsStatusBar.command = 'workbench.view.extension.social-presence-sidebar';
-    onlineFriendsStatusBar.tooltip = 'Click to view Social Presence';
+    onlineFriendsStatusBar.command = 'workbench.view.extension.viscord-sidebar';
+    onlineFriendsStatusBar.tooltip = 'Click to view viscord';
     context.subscriptions.push(onlineFriendsStatusBar);
 
     // Sync updates
@@ -321,11 +321,11 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Watch for configuration changes
     const configWatcher = vscode.workspace.onDidChangeConfiguration(e => {
-        if (e.affectsConfiguration('vscode-social-presence')) {
-            const config = vscode.workspace.getConfiguration('vscode-social-presence');
+        if (e.affectsConfiguration('vscode-viscord')) {
+            const config = vscode.workspace.getConfiguration('vscode-viscord');
 
             // Handle visibility mode changes
-            if (e.affectsConfiguration('vscode-social-presence.visibilityMode')) {
+            if (e.affectsConfiguration('vscode-viscord.visibilityMode')) {
                 const visibilityMode = config.get<string>('visibilityMode', 'followers');
                 sidebarProvider.sendMessage({
                     type: 'updatePreferences',
@@ -334,12 +334,12 @@ export async function activate(context: vscode.ExtensionContext) {
             }
 
             // Handle UI visibility changes
-            if (e.affectsConfiguration('vscode-social-presence.showInStatusBar')) {
+            if (e.affectsConfiguration('vscode-viscord.showInStatusBar')) {
                 const showStatusBar = config.get('showInStatusBar', true);
                 if (!showStatusBar) onlineFriendsStatusBar.hide();
             }
 
-            if (e.affectsConfiguration('vscode-social-presence.showBadge') &&
+            if (e.affectsConfiguration('vscode-viscord.showBadge') &&
                 !config.get('showBadge', true)) {
                 friendsTreeView.badge = undefined;
             }
@@ -355,28 +355,28 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Connect GitHub - ALREADY REGISTERED ABOVE (near line 123)
 
-    vscode.commands.registerCommand('vscode-social-presence.refresh', () => {
+    vscode.commands.registerCommand('vscode-viscord.refresh', () => {
         // Refresh views and retry connection
         sidebarProvider.reconnect();
         sidebarProvider.refresh();
         githubViewProvider.refresh();
     });
 
-    vscode.commands.registerCommand('vscode-social-presence.pinCloseFriend', async (item: any) => {
+    vscode.commands.registerCommand('vscode-viscord.pinCloseFriend', async (item: any) => {
         if (item && item.user) {
             sidebarProvider.addCloseFriend(item.user.username);
             vscode.window.showInformationMessage(`Pinned ${item.user.username} to Close Friends`);
         }
     });
 
-    vscode.commands.registerCommand('vscode-social-presence.unpinCloseFriend', (item: any) => {
+    vscode.commands.registerCommand('vscode-viscord.unpinCloseFriend', (item: any) => {
         if (item && item.user) {
             sidebarProvider.removeCloseFriend(item.user.username);
             vscode.window.showInformationMessage(`Unpinned ${item.user.username} from Close Friends`);
         }
     });
 
-    vscode.commands.registerCommand('vscode-social-presence.copyUsername', () => {
+    vscode.commands.registerCommand('vscode-viscord.copyUsername', () => {
         const currentProfile = sidebarProvider.getProfile();
         if (currentProfile && currentProfile.login) {
             vscode.env.clipboard.writeText(currentProfile.login);
@@ -384,10 +384,10 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    vscode.commands.registerCommand('vscode-social-presence.logout', async () => {
+    vscode.commands.registerCommand('vscode-viscord.logout', async () => {
         await githubService.signOut();
         await context.globalState.update('authState', 'guest');
-        vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', false);
+        vscode.commands.executeCommand('setContext', 'vscode-viscord:githubConnected', false);
 
         const guestUsername = context.globalState.get<string>('guestUsername') || 'Guest';
         statusBarItem.text = `$(account) ${guestUsername} (Guest)`;
@@ -398,15 +398,15 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.window.showInformationMessage(`Logged out of GitHub. Manual connections preserved.`);
     });
 
-    vscode.commands.registerCommand('vscode-social-presence.openSettings', () => {
-        vscode.commands.executeCommand('workbench.action.openSettings', 'vscode-social-presence');
+    vscode.commands.registerCommand('vscode-viscord.openSettings', () => {
+        vscode.commands.executeCommand('workbench.action.openSettings', 'vscode-viscord');
     });
 
-    vscode.commands.registerCommand('vscode-social-presence.createInvite', () => {
+    vscode.commands.registerCommand('vscode-viscord.createInvite', () => {
         sidebarProvider.sendMessage({ type: 'createInvite' });
     });
 
-    vscode.commands.registerCommand('vscode-social-presence.acceptInvite', async () => {
+    vscode.commands.registerCommand('vscode-viscord.acceptInvite', async () => {
         const code = await vscode.window.showInputBox({
             prompt: 'Enter invite code',
             placeHolder: 'ABC123',
@@ -421,7 +421,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    vscode.commands.registerCommand('vscode-social-presence.removeConnection', async (item: any) => {
+    vscode.commands.registerCommand('vscode-viscord.removeConnection', async (item: any) => {
         if (!item || !item.user) {
             vscode.window.showErrorMessage('No user selected');
             return;
@@ -442,7 +442,7 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    vscode.commands.registerCommand('vscode-social-presence.reset', async () => {
+    vscode.commands.registerCommand('vscode-viscord.reset', async () => {
         const confirm = await vscode.window.showWarningMessage(
             'This will clear all local data. Continue?',
             'Yes, Reset',
@@ -458,7 +458,7 @@ export async function activate(context: vscode.ExtensionContext) {
     });
 
     // Clear Cache - Refresh data without signing out
-    vscode.commands.registerCommand('vscode-social-presence.clearCache', async () => {
+    vscode.commands.registerCommand('vscode-viscord.clearCache', async () => {
         const confirm = await vscode.window.showInformationMessage(
             'Clear cached data and refresh? Your authentication will be preserved.',
             'Clear Cache',
@@ -482,7 +482,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
 
     // Sign Out of GitHub (but keep guest data)
-    vscode.commands.registerCommand('vscode-social-presence.signOutGitHub', async () => {
+    vscode.commands.registerCommand('vscode-viscord.signOutGitHub', async () => {
         const confirm = await vscode.window.showWarningMessage(
             'Sign out of GitHub? You will switch to guest mode.',
             'Sign Out',
@@ -492,7 +492,7 @@ export async function activate(context: vscode.ExtensionContext) {
         if (confirm === 'Sign Out') {
             await githubService.signOut();
             await context.globalState.update('authState', 'guest');
-            vscode.commands.executeCommand('setContext', 'vscode-social-presence:githubConnected', false);
+            vscode.commands.executeCommand('setContext', 'vscode-viscord:githubConnected', false);
 
             const guestUsername = context.globalState.get<string>('guestUsername') || 'Guest';
             statusBarItem.text = `$(account) ${guestUsername} (Guest)`;

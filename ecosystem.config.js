@@ -1,6 +1,6 @@
 module.exports = {
     apps: [{
-        name: 'vscode-social-presence',
+        name: 'vscode-viscord',
         script: './server/index.js',
         instances: 1,
         exec_mode: 'fork',  // ← Should be 'fork', not 'cluster'

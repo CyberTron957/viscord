@@ -1,6 +1,6 @@
 # Production Deployment Guide
 
-This guide explains how to deploy the VS Code Social Presence server securely using Caddy as a reverse proxy.
+This guide explains how to deploy the VS Code viscord server securely using Caddy as a reverse proxy.
 
 ## Prerequisites
 
@@ -24,8 +24,8 @@ sudo npm install -g pm2
 ### Setup Application
 ```bash
 # Clone repository (or upload files)
-git clone <your-repo-url> /var/www/social-presence
-cd /var/www/social-presence
+git clone <your-repo-url> /var/www/viscord
+cd /var/www/viscord
 
 # Install dependencies
 npm ci --production
@@ -82,7 +82,7 @@ Use PM2 with the ecosystem file for best practices:
 pm2 start ecosystem.config.js
 
 # Alternative: Manual start with environment variable
-NODE_ENV=production pm2 start server/index.js --name social-presence
+NODE_ENV=production pm2 start server/index.js --name viscord
 
 # Save the process list to restart on reboot
 pm2 save
@@ -109,14 +109,14 @@ pm2 startup
 ## 5. Maintenance
 
 - **Logs**:
-  - App logs: `pm2 logs social-presence`
-  - Caddy logs: `/var/log/caddy/social-presence.log` (if configured) or `journalctl -u caddy`
+  - App logs: `pm2 logs viscord`
+  - Caddy logs: `/var/log/caddy/viscord.log` (if configured) or `journalctl -u caddy`
 
 - **Updates**:
   ```bash
   git pull
   npm ci --production
-  pm2 restart social-presence
+  pm2 restart viscord
   ```
 
 ## 6. Database Backups
@@ -150,17 +150,17 @@ dbService.backup();
 To restore from a backup:
 ```bash
 # Stop the server
-pm2 stop social-presence
+pm2 stop viscord
 
 # Copy backup over database
 cp backups/database-TIMESTAMP.sqlite data/database.sqlite
 
 # Restart the server
-pm2 start social-presence
+pm2 start viscord
 ```
 
 ### Configure Backup Directory
 Set `BACKUP_DIR` in your `.env` file:
 ```bash
-BACKUP_DIR=/var/backups/social-presence
+BACKUP_DIR=/var/backups/viscord
 ```

@@ -68,7 +68,7 @@ A VS Code extension that shows your GitHub friends' real-time coding status! See
 ####From Marketplace (Coming Soon)
 1. Open VS Code
 2. Go to Extensions (`Cmd+Shift+X` or `Ctrl+Shift+X`)
-3. Search for "VS Code Social Presence"
+3. Search for "VS Code viscord"
 4. Click Install
 
 #### From Source
@@ -87,23 +87,23 @@ npm run compile
 
 ## ⚙️ Configuration
  
-Access settings via `Cmd+,` (Mac) or `Ctrl+,` (Windows/Linux) and search for "Social Presence":
+Access settings via `Cmd+,` (Mac) or `Ctrl+,` (Windows/Linux) and search for "viscord":
 
 ```json
 {
-  "vscode-social-presence.visibilityMode": "everyone",
-  "vscode-social-presence.shareProjectName": true,
-  "vscode-social-presence.shareLanguage": true,
-  "vscode-social-presence.shareActivity": true
+  "vscode-viscord.visibilityMode": "everyone",
+  "vscode-viscord.shareProjectName": true,
+  "vscode-viscord.shareLanguage": true,
+  "vscode-viscord.shareActivity": true
 }
 ```
 
 ### Useful Commands
-- **Reset Extension**: `vscode-social-presence.resetExtension` (Full reset)
-- **Clear Cache**: `vscode-social-presence.clearCache` (Refresh data)
-- **Sign Out**: `vscode-social-presence.signOutGitHub` (Switch to guest)
-- **Connect GitHub**: `vscode-social-presence.connectGitHub`
-- **Continue as Guest**: `vscode-social-presence.continueAsGuest`
+- **Reset Extension**: `vscode-viscord.resetExtension` (Full reset)
+- **Clear Cache**: `vscode-viscord.clearCache` (Refresh data)
+- **Sign Out**: `vscode-viscord.signOutGitHub` (Switch to guest)
+- **Connect GitHub**: `vscode-viscord.connectGitHub`
+- **Continue as Guest**: `vscode-viscord.continueAsGuest`
  
 ## 🖥️ Server Deployment
  

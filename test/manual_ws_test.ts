@@ -17,7 +17,7 @@ setTimeout(() => {
     client1.updateStatus({
         status: 'Coding',
         activity: 'Debugging',
-        project: 'VS Code Social Presence',
+        project: 'VS Code viscord',
         language: 'TypeScript'
     });
 }, 2000);

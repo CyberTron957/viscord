@@ -81,7 +81,7 @@ export class WsClient {
 
         try {
             // Get WebSocket URL from settings
-            const config = vscode.workspace.getConfiguration('vscode-social-presence');
+            const config = vscode.workspace.getConfiguration('vscode-viscord');
             const useCustomServer = config.get<boolean>('useCustomServer', false);
             const customServerUrl = config.get<string>('customServerUrl', 'ws://localhost:8080');
 
@@ -96,7 +96,7 @@ export class WsClient {
                 this.reconnectAttempts = 0;
                 this.setConnectionStatus('connected');
 
-                const config = vscode.workspace.getConfiguration('vscode-social-presence');
+                const config = vscode.workspace.getConfiguration('vscode-viscord');
                 const visibilityMode = config.get<string>('visibilityMode', 'everyone');
 
                 this.send({

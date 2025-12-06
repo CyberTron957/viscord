@@ -25,6 +25,6 @@ yourdomain.com {
 
     # Logging
     log {
-        output file /var/log/caddy/social-presence.log
+        output file /var/log/caddy/viscord.log
     }
 }

@@ -22,6 +22,7 @@
     "theme": "dark"
   },
   "keywords": [
+    "viscord",
     "social",
     "presence",
     "github",
@@ -39,89 +40,89 @@
     "Other"
   ],
   "activationEvents": [
-    "onView:social-presence-friends",
-    "onView:social-presence-github",
-    "onView:social-presence-status",
-    "onView:social-presence-explorer",
-    "onCommand:vscode-social-presence.continueAsGuest",
-    "onCommand:vscode-social-presence.connectGitHub",
-    "onCommand:vscode-social-presence.openSettings",
-    "onCommand:vscode-social-presence.createInvite"
+    "onView:viscord-friends",
+    "onView:viscord-github",
+    "onView:viscord-status",
+    "onView:viscord-explorer",
+    "onCommand:vscode-viscord.continueAsGuest",
+    "onCommand:vscode-viscord.connectGitHub",
+    "onCommand:vscode-viscord.openSettings",
+    "onCommand:vscode-viscord.createInvite"
   ],
   "main": "./dist/extension.js",
   "contributes": {
     "commands": [
       {
-        "command": "vscode-social-presence.helloWorld",
+        "command": "vscode-viscord.helloWorld",
         "title": "Hello World"
       },
       {
-        "command": "vscode-social-presence.refresh",
+        "command": "vscode-viscord.refresh",
         "title": "Refresh",
         "icon": "$(refresh)"
       },
       {
-        "command": "vscode-social-presence.pinCloseFriend",
+        "command": "vscode-viscord.pinCloseFriend",
         "title": "Pin as Close Friend",
         "icon": "$(pin)"
       },
       {
-        "command": "vscode-social-presence.unpinCloseFriend",
+        "command": "vscode-viscord.unpinCloseFriend",
         "title": "Unpin Close Friend",
         "icon": "$(pinned)"
       },
       {
-        "command": "vscode-social-presence.copyUsername",
+        "command": "vscode-viscord.copyUsername",
         "title": "Copy My Username",
         "icon": "$(clippy)"
       },
       {
-        "command": "vscode-social-presence.openSettings",
-        "title": "Social Presence Settings",
+        "command": "vscode-viscord.openSettings",
+        "title": "viscord Settings",
         "icon": "$(gear)"
       },
       {
-        "command": "vscode-social-presence.logout",
+        "command": "vscode-viscord.logout",
         "title": "Logout",
         "icon": "$(sign-out)"
       },
       {
-        "command": "vscode-social-presence.connectGitHub",
+        "command": "vscode-viscord.connectGitHub",
         "title": "Connect GitHub",
         "icon": "$(github)"
       },
       {
-        "command": "vscode-social-presence.createInvite",
+        "command": "vscode-viscord.createInvite",
         "title": "Create Invite Link",
         "icon": "$(link)"
       },
       {
-        "command": "vscode-social-presence.acceptInvite",
+        "command": "vscode-viscord.acceptInvite",
         "title": "Accept Invite Code",
         "icon": "$(person-add)"
       },
       {
-        "command": "vscode-social-presence.removeConnection",
+        "command": "vscode-viscord.removeConnection",
         "title": "Remove Connection",
         "icon": "$(trash)"
       },
       {
-        "command": "vscode-social-presence.continueAsGuest",
+        "command": "vscode-viscord.continueAsGuest",
         "title": "Continue as Guest",
         "icon": "$(account)"
       },
       {
-        "command": "vscode-social-presence.resetExtension",
+        "command": "vscode-viscord.resetExtension",
         "title": "Reset Extension",
         "icon": "$(clear-all)"
       },
       {
-        "command": "vscode-social-presence.signOutGitHub",
+        "command": "vscode-viscord.signOutGitHub",
         "title": "Sign Out of GitHub",
         "icon": "$(sign-out)"
       },
       {
-        "command": "vscode-social-presence.clearCache",
+        "command": "vscode-viscord.clearCache",
         "title": "Clear Cache",
         "icon": "$(clear-all)"
       }
@@ -129,45 +130,45 @@
     "menus": {
       "view/title": [
         {
-          "command": "vscode-social-presence.refresh",
-          "when": "view == social-presence-friends || view == social-presence-github",
+          "command": "vscode-viscord.refresh",
+          "when": "view == viscord-friends || view == viscord-github",
           "group": "navigation"
         },
         {
-          "command": "vscode-social-presence.openSettings",
-          "when": "view == social-presence-friends",
+          "command": "vscode-viscord.openSettings",
+          "when": "view == viscord-friends",
           "group": "navigation"
         },
         {
-          "command": "vscode-social-presence.createInvite",
-          "when": "view == social-presence-friends",
+          "command": "vscode-viscord.createInvite",
+          "when": "view == viscord-friends",
           "group": "navigation"
         },
         {
-          "command": "vscode-social-presence.acceptInvite",
-          "when": "view == social-presence-friends",
+          "command": "vscode-viscord.acceptInvite",
+          "when": "view == viscord-friends",
           "group": "navigation"
         },
         {
-          "command": "vscode-social-presence.signOutGitHub",
-          "when": "view == social-presence-github && vscode-social-presence:githubConnected",
+          "command": "vscode-viscord.signOutGitHub",
+          "when": "view == viscord-github && vscode-viscord:githubConnected",
           "group": "navigation"
         }
       ],
       "view/item/context": [
         {
-          "command": "vscode-social-presence.pinCloseFriend",
-          "when": "view == social-presence-github && viewItem == user",
+          "command": "vscode-viscord.pinCloseFriend",
+          "when": "view == viscord-github && viewItem == user",
           "group": "inline"
         },
         {
-          "command": "vscode-social-presence.unpinCloseFriend",
-          "when": "view == social-presence-friends && viewItem == user",
+          "command": "vscode-viscord.unpinCloseFriend",
+          "when": "view == viscord-friends && viewItem == user",
           "group": "inline"
         },
         {
-          "command": "vscode-social-presence.removeConnection",
-          "when": "view == social-presence-friends && viewItem == user-manual",
+          "command": "vscode-viscord.removeConnection",
+          "when": "view == viscord-friends && viewItem == user-manual",
           "group": "manage"
         }
       ]
@@ -175,60 +176,60 @@
     "viewsContainers": {
       "activitybar": [
         {
-          "id": "social-presence-sidebar",
-          "title": "Social Presence",
+          "id": "viscord-sidebar",
+          "title": "viscord",
           "icon": "$(account)"
         }
       ]
     },
     "views": {
-      "social-presence-sidebar": [
+      "viscord-sidebar": [
         {
-          "id": "social-presence-friends",
+          "id": "viscord-friends",
           "name": "Close Friends & Guests",
           "icon": "$(heart)"
         },
         {
-          "id": "social-presence-github",
+          "id": "viscord-github",
           "name": "GitHub Network",
           "icon": "$(github)"
         },
         {
-          "id": "social-presence-status",
+          "id": "viscord-status",
           "name": "Connection Status",
           "icon": "$(pulse)"
         }
       ],
       "explorer": [
         {
-          "id": "social-presence-explorer",
+          "id": "viscord-explorer",
           "name": "Friends Online",
           "icon": "$(account)",
-          "contextualTitle": "Social Presence"
+          "contextualTitle": "viscord"
         }
       ]
     },
     "viewsWelcome": [
       {
-        "view": "social-presence-friends",
-        "contents": "Welcome to Social Presence!\nConnect with GitHub to see your network, or continue as a guest to use invite codes.\n[Connect GitHub](command:vscode-social-presence.connectGitHub)\n[Continue as Guest](command:vscode-social-presence.continueAsGuest)",
-        "when": "!vscode-social-presence:authenticated"
+        "view": "viscord-friends",
+        "contents": "Welcome to viscord!\nConnect with GitHub to see your network, or continue as a guest to use invite codes.\n[Connect GitHub](command:vscode-viscord.connectGitHub)\n[Continue as Guest](command:vscode-viscord.continueAsGuest)",
+        "when": "!vscode-viscord:authenticated"
       },
       {
-        "view": "social-presence-github",
-        "contents": "Connect to GitHub to see your followers and following online.\n[Connect GitHub](command:vscode-social-presence.connectGitHub)",
-        "when": "!vscode-social-presence:githubConnected"
+        "view": "viscord-github",
+        "contents": "Connect to GitHub to see your followers and following online.\n[Connect GitHub](command:vscode-viscord.connectGitHub)",
+        "when": "!vscode-viscord:githubConnected"
       }
     ],
     "configuration": {
       "title": "Viscord",
       "properties": {
-        "vscode-social-presence.username": {
+        "vscode-viscord.username": {
           "type": "string",
           "default": "",
-          "description": "Your username for Social Presence."
+          "description": "Your username for viscord."
         },
-        "vscode-social-presence.visibilityMode": {
+        "vscode-viscord.visibilityMode": {
           "type": "string",
           "enum": [
             "everyone",
@@ -240,53 +241,53 @@
           "default": "everyone",
           "description": "Control who can see your online status and activity."
         },
-        "vscode-social-presence.shareProjectName": {
+        "vscode-viscord.shareProjectName": {
           "type": "boolean",
           "default": true,
           "description": "Share the name of the current project."
         },
-        "vscode-social-presence.shareLanguage": {
+        "vscode-viscord.shareLanguage": {
           "type": "boolean",
           "default": true,
           "description": "Share the current programming language."
         },
-        "vscode-social-presence.shareActivity": {
+        "vscode-viscord.shareActivity": {
           "type": "boolean",
           "default": true,
           "description": "Share your current activity (Coding, Debugging, Idle)."
         },
-        "vscode-social-presence.showInStatusBar": {
+        "vscode-viscord.showInStatusBar": {
           "type": "boolean",
           "default": true,
           "description": "Show online friends count in the status bar."
         },
-        "vscode-social-presence.showInExplorer": {
+        "vscode-viscord.showInExplorer": {
           "type": "boolean",
           "default": true,
           "description": "Show 'Friends Online' section in the Explorer sidebar."
         },
-        "vscode-social-presence.showBadge": {
+        "vscode-viscord.showBadge": {
           "type": "boolean",
           "default": true,
-          "description": "Show online count badge on the Social Presence icon."
+          "description": "Show online count badge on the viscord icon."
         },
-        "vscode-social-presence.useCustomServer": {
+        "vscode-viscord.useCustomServer": {
           "type": "boolean",
           "default": false,
           "description": "Enable custom server URL for local testing. Leave disabled to use the official server."
         },
-        "vscode-social-presence.customServerUrl": {
+        "vscode-viscord.customServerUrl": {
           "type": "string",
           "default": "ws://localhost:8080",
           "description": "Custom WebSocket server URL (only used when 'Use Custom Server' is enabled)."
         },
-        "vscode-social-presence.clearCache": {
+        "vscode-viscord.clearCache": {
           "type": "null",
-          "markdownDescription": "**[Clear Cache](command:vscode-social-presence.clearCache)** - Clear cached data and refresh connections without signing out."
+          "markdownDescription": "**[Clear Cache](command:vscode-viscord.clearCache)** - Clear cached data and refresh connections without signing out."
         },
-        "vscode-social-presence.resetExtension": {
+        "vscode-viscord.resetExtension": {
           "type": "null",
-          "markdownDescription": "**[Reset Extension](command:vscode-social-presence.resetExtension)** - Clear all data and return to initial state. Use this if you're experiencing issues."
+          "markdownDescription": "**[Reset Extension](command:vscode-viscord.resetExtension)** - Clear all data and return to initial state. Use this if you're experiencing issues."
         }
       }
     }
