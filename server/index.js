@@ -95,25 +95,6 @@ function filterUserData(clientData) {
     }
     return filtered;
 }
-// Read-through cache for manual connections
-function getCachedManualConnections(username) {
-    return __awaiter(this, void 0, void 0, function* () {
-        // Try Redis cache first
-        if (redisService_1.redisService.connected) {
-            const cached = yield redisService_1.redisService.getCachedFriendList(username);
-            if (cached) {
-                return cached;
-            }
-        }
-        // Cache miss - query database and cache result
-        const connections = database_1.dbService.getManualConnections(username);
-        // Store in Redis cache
-        if (redisService_1.redisService.connected) {
-            yield redisService_1.redisService.cacheFriendList(username, connections);
-        }
-        return connections;
-    });
-}
 wss.on('connection', (ws, req) => {
     const clientIp = req.socket.remoteAddress || 'unknown';
     // Rate limiting: connection attempts
@@ -490,16 +471,12 @@ function getCachedOfflineUsers(githubId, followers, following) {
     offlineUserCache.set(githubId, { users: offlineUsers, timestamp: Date.now() });
     return offlineUsers;
 }
-// 3. Batch Database Writes: Don't write last_seen on every disconnect
+// Flush pending last_seen writes every 30 seconds (batch writes for performance)
 const pendingLastSeenWrites = new Map();
-function scheduleLastSeenUpdate(githubId) {
-    pendingLastSeenWrites.set(githubId, Date.now());
-}
-// Flush pending writes every 30 seconds
 setInterval(() => {
     if (pendingLastSeenWrites.size > 0) {
         console.log(`Flushing ${pendingLastSeenWrites.size} last_seen updates`);
-        for (const [githubId, timestamp] of pendingLastSeenWrites) {
+        for (const [githubId] of pendingLastSeenWrites) {
             database_1.dbService.updateLastSeen(githubId);
         }
         pendingLastSeenWrites.clear();
@@ -656,22 +633,17 @@ startServer().catch(err => {
     console.error('Failed to start server:', err);
     process.exit(1);
 });
-// Graceful shutdown
-process.on('SIGTERM', () => __awaiter(void 0, void 0, void 0, function* () {
-    console.log('SIGTERM received, closing server...');
-    clearInterval(heartbeatInterval);
-    yield redisService_1.redisService.disconnect();
-    wss.close(() => {
-        database_1.dbService.close();
-        process.exit(0);
+// Graceful shutdown handler
+function gracefulShutdown(signal) {
+    return __awaiter(this, void 0, void 0, function* () {
+        console.log(`${signal} received, closing server...`);
+        clearInterval(heartbeatInterval);
+        yield redisService_1.redisService.disconnect();
+        wss.close(() => {
+            database_1.dbService.close();
+            process.exit(0);
+        });
     });
-}));
-process.on('SIGINT', () => __awaiter(void 0, void 0, void 0, function* () {
-    console.log('SIGINT received, closing server...');
-    clearInterval(heartbeatInterval);
-    yield redisService_1.redisService.disconnect();
-    wss.close(() => {
-        database_1.dbService.close();
-        process.exit(0);
-    });
-}));
+}
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

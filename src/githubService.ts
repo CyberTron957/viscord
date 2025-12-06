@@ -5,6 +5,7 @@ export interface GitHubUser {
     id: number;
     login: string;
     avatar_url: string;
+    html_url?: string;
     name?: string;
 }
 
@@ -44,90 +45,55 @@ export class GitHubService {
         };
     }
 
-    async getFollowers(): Promise<GitHubUser[]> {
+    /**
+     * Fetch paginated GitHub users (followers or following)
+     */
+    private async fetchPaginatedUsers(
+        type: 'followers' | 'following'
+    ): Promise<GitHubUser[]> {
         // Check cache
-        if (this.cache.followers && this.cache.lastSync && Date.now() - this.cache.lastSync < this.CACHE_TTL) {
-            return this.cache.followers;
+        if (this.cache[type] && this.cache.lastSync &&
+            Date.now() - this.cache.lastSync < this.CACHE_TTL) {
+            return this.cache[type]!;
         }
 
         if (!this.octokit) {
             throw new Error('Not authenticated');
         }
 
-        const followers: GitHubUser[] = [];
+        const users: GitHubUser[] = [];
         let page = 1;
         const perPage = 100;
 
         while (true) {
-            const { data } = await this.octokit.users.listFollowersForAuthenticatedUser({
-                per_page: perPage,
-                page: page
-            });
+            const { data } = type === 'followers'
+                ? await this.octokit.users.listFollowersForAuthenticatedUser({ per_page: perPage, page })
+                : await this.octokit.users.listFollowedByAuthenticatedUser({ per_page: perPage, page });
 
-            if (data.length === 0) {
-                break;
-            }
+            if (data.length === 0) break;
 
-            followers.push(...data.map(user => ({
+            users.push(...data.map(user => ({
                 id: user.id,
                 login: user.login,
                 avatar_url: user.avatar_url,
                 name: user.name || undefined
             })));
 
-            if (data.length < perPage) {
-                break;
-            }
-
+            if (data.length < perPage) break;
             page++;
         }
 
-        this.cache.followers = followers;
+        this.cache[type] = users;
         this.cache.lastSync = Date.now();
-        return followers;
+        return users;
+    }
+
+    async getFollowers(): Promise<GitHubUser[]> {
+        return this.fetchPaginatedUsers('followers');
     }
 
     async getFollowing(): Promise<GitHubUser[]> {
-        // Check cache
-        if (this.cache.following && this.cache.lastSync && Date.now() - this.cache.lastSync < this.CACHE_TTL) {
-            return this.cache.following;
-        }
-
-        if (!this.octokit) {
-            throw new Error('Not authenticated');
-        }
-
-        const following: GitHubUser[] = [];
-        let page = 1;
-        const perPage = 100;
-
-        while (true) {
-            const { data } = await this.octokit.users.listFollowedByAuthenticatedUser({
-                per_page: perPage,
-                page: page
-            });
-
-            if (data.length === 0) {
-                break;
-            }
-
-            following.push(...data.map(user => ({
-                id: user.id,
-                login: user.login,
-                avatar_url: user.avatar_url,
-                name: user.name || undefined
-            })));
-
-            if (data.length < perPage) {
-                break;
-            }
-
-            page++;
-        }
-
-        this.cache.following = following;
-        this.cache.lastSync = Date.now();
-        return following;
+        return this.fetchPaginatedUsers('following');
     }
 
     getToken(): string | undefined {

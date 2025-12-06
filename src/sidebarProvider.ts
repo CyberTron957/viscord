@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { WsClient, UserStatus, ConnectionStatus } from './wsClient';
 import { GitHubService, GitHubUser } from './githubService';
+import { createGuestProfile, buildUserDescription, buildUserTooltip, getUserStatusIcon, formatLastSeen } from './utils';
 
 export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     private _onDidChangeTreeData: vscode.EventEmitter<TreeNode | undefined | null | void> = new vscode.EventEmitter<TreeNode | undefined | null | void>();
@@ -166,27 +167,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
                 break;
         }
 
-        return users.map(u => {
-            // Determine if manual connection
-            // Manual connections are:
-            // 1. If not connected to GitHub, everyone is manual
-            // 2. If connected to GitHub, users NOT in followers/following (invite code connections)
-            // 3. Pinned close friends are NOT necessarily manual (they might be GitHub followers too)
-
-            let isManual = false;
-
-            if (!this.isGitHubConnected) {
-                // Guest mode: all connections are manual
-                isManual = true;
-            } else {
-                // GitHub mode: manual only if NOT in followers/following
-                const isFollower = this.followers.some(f => f.login.toLowerCase() === u.username.toLowerCase());
-                const isFollowing = this.following.some(f => f.login.toLowerCase() === u.username.toLowerCase());
-                isManual = !isFollower && !isFollowing;
-            }
-
-            return new UserNode(u, vscode.TreeItemCollapsibleState.None, isManual);
-        });
+        return users.map(u => new UserNode(u, vscode.TreeItemCollapsibleState.None, this.isManualConnection(u.username)));
     }
 
     private getFollowingUsers(): UserStatus[] {
@@ -199,6 +180,19 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         return this.allUsers.filter(u => followerLogins.includes(u.username.toLowerCase()));
     }
 
+    /**
+     * Check if a user is a manual connection (not in followers/following)
+     */
+    private isManualConnection(username: string): boolean {
+        if (!this.isGitHubConnected) {
+            return true; // Guest mode: all connections are manual
+        }
+        const usernameLower = username.toLowerCase();
+        const isFollower = this.followers.some(f => f.login.toLowerCase() === usernameLower);
+        const isFollowing = this.following.some(f => f.login.toLowerCase() === usernameLower);
+        return !isFollower && !isFollowing;
+    }
+
     private getCloseFriendsUsers(): UserStatus[] {
         const closeFriendsLower = this.closeFriends.map(f => f.toLowerCase());
 
@@ -207,18 +201,8 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
             if (closeFriendsLower.includes(u.username.toLowerCase())) {
                 return true;
             }
-
             // Include if manual connection (not in followers/following)
-            // This includes users connected via invite codes
-            if (this.isGitHubConnected) {
-                const isFollower = this.followers.some(f => f.login.toLowerCase() === u.username.toLowerCase());
-                const isFollowing = this.following.some(f => f.login.toLowerCase() === u.username.toLowerCase());
-                const isManual = !isFollower && !isFollowing;
-                return isManual;
-            } else {
-                // If not connected to GitHub, all connections are manual
-                return true;
-            }
+            return this.isManualConnection(u.username);
         });
     }
 
@@ -239,11 +223,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         this.following = [];
 
         // Update profile
-        this.profile = {
-            login: guestUsername,
-            avatar_url: 'https://avatars.githubusercontent.com/u/0?s=200&v=4',
-            html_url: ''
-        } as any;
+        this.profile = createGuestProfile(guestUsername);
 
         // Reconnect with guest credentials (no token)
         this.wsClient.connect(guestUsername, undefined);
@@ -289,12 +269,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         this.isGitHubConnected = false;
 
         // Update profile to guest
-        this.profile = {
-            id: 0, // Guest users have ID 0
-            login: guestUsername,
-            avatar_url: 'https://avatars.githubusercontent.com/u/0?s=200&v=4',
-            html_url: ''
-        } as GitHubUser;
+        this.profile = createGuestProfile(guestUsername);
 
         // Reconnect WebSocket without token (manual connections preserved)
         this.wsClient.disconnect();
@@ -381,7 +356,7 @@ export class GitHubViewProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 }
 
-type TreeNode = Category | UserNode | StatusIndicatorNode;
+type TreeNode = Category | UserNode;
 
 class Category extends vscode.TreeItem {
     constructor(
@@ -403,138 +378,12 @@ class UserNode extends vscode.TreeItem {
     ) {
         super(user.username, collapsibleState);
 
-        // Richer description: Activity • Project (Language)
-        let description = '';
-
-        if (user.status === 'Offline') {
-            if (user.lastSeen) {
-                const lastSeenTime = this.formatLastSeen(user.lastSeen);
-                description = `Last seen ${lastSeenTime}`;
-            } else {
-                description = 'Offline';
-            }
-        } else {
-            // Online/Away
-            const parts = [];
-            if (user.activity) parts.push(user.activity);
-
-            // Only show project/lang if not Hidden
-            if (user.project && user.project !== 'Hidden') parts.push(user.project);
-            if (user.language && user.language !== 'Hidden') parts.push(`(${user.language})`);
-
-            description = parts.join(' • ');
-        }
-
-        this.tooltip = new vscode.MarkdownString(
-            `**${user.username}**\n\n` +
-            `Status: ${user.status}\n` +
-            `Activity: ${user.activity}\n` +
-            (user.project && user.project !== 'Hidden' ? `Project: ${user.project}\n` : '') +
-            (user.language && user.language !== 'Hidden' ? `Language: ${user.language}` : '')
-        );
-
-        this.description = description;
+        this.description = buildUserDescription(user);
+        this.tooltip = buildUserTooltip(user);
+        this.iconPath = getUserStatusIcon(user.status);
 
         // Set context value for commands
         // 'user' is the base context. We add 'manual' if it's a manual connection.
         this.contextValue = isManualConnection ? 'user-manual' : 'user';
-
-        this.setIcon(user.status);
-    }
-
-    private formatLastSeen(timestamp: number): string {
-        const now = Date.now();
-        const diff = now - timestamp;
-
-        const minutes = Math.floor(diff / 60000);
-        const hours = Math.floor(diff / 3600000);
-        const days = Math.floor(diff / 86400000);
-
-        if (minutes < 1) return 'just now';
-        if (minutes < 60) return `${minutes}m ago`;
-        if (hours < 24) return `${hours}h ago`;
-        return `${days}d ago`;
-    }
-
-    private setIcon(status: string) {
-        if (status === 'Online') {
-            // Vibrant Green Dot
-            this.iconPath = new vscode.ThemeIcon('record', new vscode.ThemeColor('charts.green'));
-        } else if (status === 'Away') {
-            // Vibrant Yellow Dot
-            this.iconPath = new vscode.ThemeIcon('record', new vscode.ThemeColor('charts.yellow'));
-        } else {
-            // Grey Outline
-            this.iconPath = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('charts.gray'));
-        }
-    }
-}
-
-class StatusIndicatorNode extends vscode.TreeItem {
-    constructor(status: ConnectionStatus) {
-        let label: string;
-        let icon: vscode.ThemeIcon;
-        let tooltip: string;
-
-        switch (status) {
-            case 'connected':
-                label = 'Connected';
-                icon = new vscode.ThemeIcon('check', new vscode.ThemeColor('charts.green'));
-                tooltip = 'Connected to server';
-                break;
-            case 'connecting':
-                label = 'Connecting...';
-                icon = new vscode.ThemeIcon('sync~spin', new vscode.ThemeColor('charts.yellow'));
-                tooltip = 'Connecting to server...';
-                break;
-            case 'error':
-                label = 'Connection Error';
-                icon = new vscode.ThemeIcon('error', new vscode.ThemeColor('charts.red'));
-                tooltip = 'Failed to connect. Click refresh to retry.';
-                break;
-            case 'disconnected':
-            default:
-                label = 'Disconnected';
-                icon = new vscode.ThemeIcon('circle-outline', new vscode.ThemeColor('charts.gray'));
-                tooltip = 'Not connected to server';
-                break;
-        }
-
-        super(label, vscode.TreeItemCollapsibleState.None);
-        this.iconPath = icon;
-        this.tooltip = tooltip;
-        this.contextValue = 'statusIndicator';
-        this.description = '';
-    }
-}
-
-class Friend extends vscode.TreeItem {
-    constructor(
-        public readonly label: string,
-        private status: string,
-        private activity: string,
-        private project: string,
-        private language: string,
-        public readonly collapsibleState: vscode.TreeItemCollapsibleState
-    ) {
-        super(label, collapsibleState);
-        this.tooltip = `${this.label} - ${this.status}\nProject: ${this.project}\nLanguage: ${this.language}`;
-        this.description = `${this.status} - ${this.activity}`;
-
-        this.setIcon(status);
-    }
-
-    private setIcon(status: string) {
-        // In a real app, we would use path to icons
-        // For now, we can use built-in product icons or emojis in label if needed, 
-        // but TreeItem has iconPath property.
-        // Let's use simple ThemeIcons for now.
-        if (status === 'Online') {
-            this.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('testing.iconPassed'));
-        } else if (status === 'Away') {
-            this.iconPath = new vscode.ThemeIcon('circle-filled', new vscode.ThemeColor('testing.iconSkipped'));
-        } else {
-            this.iconPath = new vscode.ThemeIcon('circle-outline');
-        }
     }
 }

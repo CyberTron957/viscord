@@ -120,26 +120,7 @@ function filterUserData(clientData: ClientData): any {
     return filtered;
 }
 
-// Read-through cache for manual connections
-async function getCachedManualConnections(username: string): Promise<string[]> {
-    // Try Redis cache first
-    if (redisService.connected) {
-        const cached = await redisService.getCachedFriendList(username);
-        if (cached) {
-            return cached;
-        }
-    }
 
-    // Cache miss - query database and cache result
-    const connections = dbService.getManualConnections(username);
-
-    // Store in Redis cache
-    if (redisService.connected) {
-        await redisService.cacheFriendList(username, connections);
-    }
-
-    return connections;
-}
 
 wss.on('connection', (ws, req) => {
     const clientIp = req.socket.remoteAddress || 'unknown';
@@ -573,18 +554,13 @@ function getCachedOfflineUsers(githubId: number, followers: number[], following:
     return offlineUsers;
 }
 
-// 3. Batch Database Writes: Don't write last_seen on every disconnect
+// Flush pending last_seen writes every 30 seconds (batch writes for performance)
 const pendingLastSeenWrites = new Map<number, number>();
 
-function scheduleLastSeenUpdate(githubId: number) {
-    pendingLastSeenWrites.set(githubId, Date.now());
-}
-
-// Flush pending writes every 30 seconds
 setInterval(() => {
     if (pendingLastSeenWrites.size > 0) {
         console.log(`Flushing ${pendingLastSeenWrites.size} last_seen updates`);
-        for (const [githubId, timestamp] of pendingLastSeenWrites) {
+        for (const [githubId] of pendingLastSeenWrites) {
             dbService.updateLastSeen(githubId);
         }
         pendingLastSeenWrites.clear();
@@ -773,23 +749,16 @@ startServer().catch(err => {
     process.exit(1);
 });
 
-// Graceful shutdown
-process.on('SIGTERM', async () => {
-    console.log('SIGTERM received, closing server...');
+// Graceful shutdown handler
+async function gracefulShutdown(signal: string) {
+    console.log(`${signal} received, closing server...`);
     clearInterval(heartbeatInterval);
     await redisService.disconnect();
     wss.close(() => {
         dbService.close();
         process.exit(0);
     });
-});
+}
 
-process.on('SIGINT', async () => {
-    console.log('SIGINT received, closing server...');
-    clearInterval(heartbeatInterval);
-    await redisService.disconnect();
-    wss.close(() => {
-        dbService.close();
-        process.exit(0);
-    });
-});
+process.on('SIGTERM', () => gracefulShutdown('SIGTERM'));
+process.on('SIGINT', () => gracefulShutdown('SIGINT'));

@@ -3,6 +3,7 @@ import { SidebarProvider, GitHubViewProvider } from './sidebarProvider';
 import { ExplorerPresenceProvider } from './explorerPresenceProvider';
 import { ActivityTracker } from './activityTracker';
 import { GitHubService } from './githubService';
+import { createGuestProfile, GUEST_AVATAR_URL } from './utils';
 
 export async function activate(context: vscode.ExtensionContext) {
     console.log('VS Code viscord extension is activating');
@@ -40,11 +41,7 @@ export async function activate(context: vscode.ExtensionContext) {
     if (authState === 'guest') {
         let username = context.globalState.get<string>('guestUsername') || '';
         if (username) {
-            profile = {
-                login: username,
-                avatar_url: 'https://avatars.githubusercontent.com/u/0?s=200&v=4',
-                html_url: ''
-            };
+            profile = createGuestProfile(username);
             isGitHubConnected = false;
         } else {
             // Invalid guest state, reset
@@ -54,7 +51,7 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // If no valid auth state, profile is null.
     if (!profile) {
-        profile = { login: '', avatar_url: '', html_url: '' };
+        profile = { id: 0, login: '', avatar_url: '', html_url: '' };
     }
 
     // Set context keys
@@ -105,11 +102,7 @@ export async function activate(context: vscode.ExtensionContext) {
         vscode.commands.executeCommand('setContext', 'vscode-viscord:githubConnected', false);
 
         // Update profile and reconnect
-        const guestProfile = {
-            login: username,
-            avatar_url: 'https://avatars.githubusercontent.com/u/0?s=200&v=4',
-            html_url: ''
-        };
+        const guestProfile = createGuestProfile(username);
 
         statusBarItem.text = `$(account) ${username} (Guest)`;
         statusBarItem.show();
@@ -385,7 +378,8 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    vscode.commands.registerCommand('vscode-viscord.logout', async () => {
+    // Helper function for signing out of GitHub
+    const signOutOfGitHub = async (message: string) => {
         await githubService.signOut();
         await context.globalState.update('authState', 'guest');
         vscode.commands.executeCommand('setContext', 'vscode-viscord:githubConnected', false);
@@ -396,7 +390,11 @@ export async function activate(context: vscode.ExtensionContext) {
         sidebarProvider.disconnectGitHub(guestUsername);
         githubViewProvider.refresh();
 
-        vscode.window.showInformationMessage(`Logged out of GitHub. Manual connections preserved.`);
+        vscode.window.showInformationMessage(message);
+    };
+
+    vscode.commands.registerCommand('vscode-viscord.logout', async () => {
+        await signOutOfGitHub('Logged out of GitHub. Manual connections preserved.');
     });
 
     vscode.commands.registerCommand('vscode-viscord.openSettings', () => {
@@ -479,9 +477,6 @@ export async function activate(context: vscode.ExtensionContext) {
         }
     });
 
-    // Reset Extension - Full reset to fresh install state
-
-
     // Sign Out of GitHub (but keep guest data)
     vscode.commands.registerCommand('vscode-viscord.signOutGitHub', async () => {
         const confirm = await vscode.window.showWarningMessage(
@@ -491,17 +486,7 @@ export async function activate(context: vscode.ExtensionContext) {
         );
 
         if (confirm === 'Sign Out') {
-            await githubService.signOut();
-            await context.globalState.update('authState', 'guest');
-            vscode.commands.executeCommand('setContext', 'vscode-viscord:githubConnected', false);
-
-            const guestUsername = context.globalState.get<string>('guestUsername') || 'Guest';
-            statusBarItem.text = `$(account) ${guestUsername} (Guest)`;
-
-            sidebarProvider.disconnectGitHub(guestUsername);
-            githubViewProvider.refresh();
-
-            vscode.window.showInformationMessage('Signed out of GitHub. Your manual connections are preserved.');
+            await signOutOfGitHub('Signed out of GitHub. Your manual connections are preserved.');
         }
     });
 }

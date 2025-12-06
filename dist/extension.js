@@ -3741,10 +3741,10 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode6 = __toESM(require("vscode"));
+var vscode7 = __toESM(require("vscode"));
 
 // src/sidebarProvider.ts
-var vscode2 = __toESM(require("vscode"));
+var vscode3 = __toESM(require("vscode"));
 
 // node_modules/ws/wrapper.mjs
 var import_stream = __toESM(require_stream(), 1);
@@ -3996,14 +3996,65 @@ var WsClient = class {
   }
 };
 
+// src/utils.ts
+var vscode2 = __toESM(require("vscode"));
+var GUEST_AVATAR_URL = "https://avatars.githubusercontent.com/u/0?s=200&v=4";
+function createGuestProfile(username) {
+  return {
+    id: 0,
+    login: username,
+    avatar_url: GUEST_AVATAR_URL,
+    html_url: ""
+  };
+}
+function formatLastSeen(timestamp) {
+  const now = Date.now();
+  const diff = now - timestamp;
+  const minutes = Math.floor(diff / 6e4);
+  const hours = Math.floor(diff / 36e5);
+  const days = Math.floor(diff / 864e5);
+  if (minutes < 1) return "just now";
+  if (minutes < 60) return `${minutes}m ago`;
+  if (hours < 24) return `${hours}h ago`;
+  return `${days}d ago`;
+}
+function buildUserDescription(user) {
+  if (user.status === "Offline") {
+    return user.lastSeen ? `Last seen ${formatLastSeen(user.lastSeen)}` : "Offline";
+  }
+  const parts = [];
+  if (user.activity) parts.push(user.activity);
+  if (user.project && user.project !== "Hidden") parts.push(user.project);
+  if (user.language && user.language !== "Hidden") parts.push(`(${user.language})`);
+  return parts.join(" \u2022 ");
+}
+function buildUserTooltip(user) {
+  return new vscode2.MarkdownString(
+    `**${user.username}**
+
+Status: ${user.status}
+Activity: ${user.activity}
+` + (user.project && user.project !== "Hidden" ? `Project: ${user.project}
+` : "") + (user.language && user.language !== "Hidden" ? `Language: ${user.language}` : "")
+  );
+}
+function getUserStatusIcon(status) {
+  if (status === "Online") {
+    return new vscode2.ThemeIcon("record", new vscode2.ThemeColor("charts.green"));
+  } else if (status === "Away") {
+    return new vscode2.ThemeIcon("record", new vscode2.ThemeColor("charts.yellow"));
+  }
+  return new vscode2.ThemeIcon("circle-outline", new vscode2.ThemeColor("charts.gray"));
+}
+
 // src/sidebarProvider.ts
 var SidebarProvider = class {
   constructor(context, profile, followers, following, githubService, isGitHubConnected, isAuthenticated) {
-    this._onDidChangeTreeData = new vscode2.EventEmitter();
+    this._onDidChangeTreeData = new vscode3.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
-    this._onUsersUpdated = new vscode2.EventEmitter();
+    this._onUsersUpdated = new vscode3.EventEmitter();
     this.onUsersUpdated = this._onUsersUpdated.event;
-    this._onConnectionStatusChanged = new vscode2.EventEmitter();
+    this._onConnectionStatusChanged = new vscode3.EventEmitter();
     this.onConnectionStatusChanged = this._onConnectionStatusChanged.event;
     this.allUsers = [];
     this.closeFriends = [];
@@ -4095,7 +4146,7 @@ var SidebarProvider = class {
   getCategories() {
     const closeFriendsCount = this.getCloseFriendsUsers().length;
     const categories = [
-      new Category("Close Friends", vscode2.TreeItemCollapsibleState.Expanded, closeFriendsCount)
+      new Category("Close Friends", vscode3.TreeItemCollapsibleState.Expanded, closeFriendsCount)
     ];
     return categories;
   }
@@ -4115,17 +4166,7 @@ var SidebarProvider = class {
         users = this.allUsers.filter((u) => u.username !== this.profile.login);
         break;
     }
-    return users.map((u) => {
-      let isManual = false;
-      if (!this.isGitHubConnected) {
-        isManual = true;
-      } else {
-        const isFollower = this.followers.some((f) => f.login.toLowerCase() === u.username.toLowerCase());
-        const isFollowing = this.following.some((f) => f.login.toLowerCase() === u.username.toLowerCase());
-        isManual = !isFollower && !isFollowing;
-      }
-      return new UserNode(u, vscode2.TreeItemCollapsibleState.None, isManual);
-    });
+    return users.map((u) => new UserNode(u, vscode3.TreeItemCollapsibleState.None, this.isManualConnection(u.username)));
   }
   getFollowingUsers() {
     const followingLogins = this.following.map((f) => f.login.toLowerCase());
@@ -4135,20 +4176,25 @@ var SidebarProvider = class {
     const followerLogins = this.followers.map((f) => f.login.toLowerCase());
     return this.allUsers.filter((u) => followerLogins.includes(u.username.toLowerCase()));
   }
+  /**
+   * Check if a user is a manual connection (not in followers/following)
+   */
+  isManualConnection(username) {
+    if (!this.isGitHubConnected) {
+      return true;
+    }
+    const usernameLower = username.toLowerCase();
+    const isFollower = this.followers.some((f) => f.login.toLowerCase() === usernameLower);
+    const isFollowing = this.following.some((f) => f.login.toLowerCase() === usernameLower);
+    return !isFollower && !isFollowing;
+  }
   getCloseFriendsUsers() {
     const closeFriendsLower = this.closeFriends.map((f) => f.toLowerCase());
     return this.allUsers.filter((u) => {
       if (closeFriendsLower.includes(u.username.toLowerCase())) {
         return true;
       }
-      if (this.isGitHubConnected) {
-        const isFollower = this.followers.some((f) => f.login.toLowerCase() === u.username.toLowerCase());
-        const isFollowing = this.following.some((f) => f.login.toLowerCase() === u.username.toLowerCase());
-        const isManual = !isFollower && !isFollowing;
-        return isManual;
-      } else {
-        return true;
-      }
+      return this.isManualConnection(u.username);
     });
   }
   updateStatus(status) {
@@ -4161,11 +4207,7 @@ var SidebarProvider = class {
     this.wsClient.disconnect();
     this.followers = [];
     this.following = [];
-    this.profile = {
-      login: guestUsername,
-      avatar_url: "https://avatars.githubusercontent.com/u/0?s=200&v=4",
-      html_url: ""
-    };
+    this.profile = createGuestProfile(guestUsername);
     this.wsClient.connect(guestUsername, void 0);
     this.refresh();
   }
@@ -4194,13 +4236,7 @@ var SidebarProvider = class {
     this.followers = [];
     this.following = [];
     this.isGitHubConnected = false;
-    this.profile = {
-      id: 0,
-      // Guest users have ID 0
-      login: guestUsername,
-      avatar_url: "https://avatars.githubusercontent.com/u/0?s=200&v=4",
-      html_url: ""
-    };
+    this.profile = createGuestProfile(guestUsername);
     this.wsClient.disconnect();
     this.wsClient.connect(guestUsername, void 0);
     this.refresh();
@@ -4209,7 +4245,7 @@ var SidebarProvider = class {
 var GitHubViewProvider = class {
   constructor(sidebarProvider) {
     this.sidebarProvider = sidebarProvider;
-    this._onDidChangeTreeData = new vscode2.EventEmitter();
+    this._onDidChangeTreeData = new vscode3.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
     sidebarProvider.onUsersUpdated(() => {
       this.refresh();
@@ -4238,9 +4274,9 @@ var GitHubViewProvider = class {
     const followersCount = this.getFollowersUsers().length;
     const allUsersCount = this.sidebarProvider.getAllUsers().filter((u) => u.username !== this.sidebarProvider.getProfile().login).length;
     return [
-      new Category("Following", vscode2.TreeItemCollapsibleState.Collapsed, followingCount),
-      new Category("Followers", vscode2.TreeItemCollapsibleState.Collapsed, followersCount),
-      new Category("All Users", vscode2.TreeItemCollapsibleState.Collapsed, allUsersCount)
+      new Category("Following", vscode3.TreeItemCollapsibleState.Collapsed, followingCount),
+      new Category("Followers", vscode3.TreeItemCollapsibleState.Collapsed, followersCount),
+      new Category("All Users", vscode3.TreeItemCollapsibleState.Collapsed, allUsersCount)
     ];
   }
   getUsersForCategory(category) {
@@ -4256,7 +4292,7 @@ var GitHubViewProvider = class {
         users = this.sidebarProvider.getAllUsers().filter((u) => u.username !== this.sidebarProvider.getProfile().login);
         break;
     }
-    return users.map((u) => new UserNode(u, vscode2.TreeItemCollapsibleState.None));
+    return users.map((u) => new UserNode(u, vscode3.TreeItemCollapsibleState.None));
   }
   getFollowingUsers() {
     const followingLogins = this.sidebarProvider.getFollowingList().map((f) => f.login.toLowerCase());
@@ -4267,7 +4303,7 @@ var GitHubViewProvider = class {
     return this.sidebarProvider.getAllUsers().filter((u) => followerLogins.includes(u.username.toLowerCase()));
   }
 };
-var Category = class extends vscode2.TreeItem {
+var Category = class extends vscode3.TreeItem {
   constructor(label, collapsibleState, count) {
     super(label, collapsibleState);
     this.label = label;
@@ -4277,65 +4313,23 @@ var Category = class extends vscode2.TreeItem {
     this.contextValue = "category";
   }
 };
-var UserNode = class extends vscode2.TreeItem {
+var UserNode = class extends vscode3.TreeItem {
   constructor(user, collapsibleState, isManualConnection = false) {
     super(user.username, collapsibleState);
     this.user = user;
     this.collapsibleState = collapsibleState;
-    let description = "";
-    if (user.status === "Offline") {
-      if (user.lastSeen) {
-        const lastSeenTime = this.formatLastSeen(user.lastSeen);
-        description = `Last seen ${lastSeenTime}`;
-      } else {
-        description = "Offline";
-      }
-    } else {
-      const parts = [];
-      if (user.activity) parts.push(user.activity);
-      if (user.project && user.project !== "Hidden") parts.push(user.project);
-      if (user.language && user.language !== "Hidden") parts.push(`(${user.language})`);
-      description = parts.join(" \u2022 ");
-    }
-    this.tooltip = new vscode2.MarkdownString(
-      `**${user.username}**
-
-Status: ${user.status}
-Activity: ${user.activity}
-` + (user.project && user.project !== "Hidden" ? `Project: ${user.project}
-` : "") + (user.language && user.language !== "Hidden" ? `Language: ${user.language}` : "")
-    );
-    this.description = description;
+    this.description = buildUserDescription(user);
+    this.tooltip = buildUserTooltip(user);
+    this.iconPath = getUserStatusIcon(user.status);
     this.contextValue = isManualConnection ? "user-manual" : "user";
-    this.setIcon(user.status);
-  }
-  formatLastSeen(timestamp) {
-    const now = Date.now();
-    const diff = now - timestamp;
-    const minutes = Math.floor(diff / 6e4);
-    const hours = Math.floor(diff / 36e5);
-    const days = Math.floor(diff / 864e5);
-    if (minutes < 1) return "just now";
-    if (minutes < 60) return `${minutes}m ago`;
-    if (hours < 24) return `${hours}h ago`;
-    return `${days}d ago`;
-  }
-  setIcon(status) {
-    if (status === "Online") {
-      this.iconPath = new vscode2.ThemeIcon("record", new vscode2.ThemeColor("charts.green"));
-    } else if (status === "Away") {
-      this.iconPath = new vscode2.ThemeIcon("record", new vscode2.ThemeColor("charts.yellow"));
-    } else {
-      this.iconPath = new vscode2.ThemeIcon("circle-outline", new vscode2.ThemeColor("charts.gray"));
-    }
   }
 };
 
 // src/explorerPresenceProvider.ts
-var vscode3 = __toESM(require("vscode"));
+var vscode4 = __toESM(require("vscode"));
 var ExplorerPresenceProvider = class {
   constructor() {
-    this._onDidChangeTreeData = new vscode3.EventEmitter();
+    this._onDidChangeTreeData = new vscode4.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
     this.onlineUsers = [];
     this.pinnedFriends = [];
@@ -4370,36 +4364,19 @@ var ExplorerPresenceProvider = class {
     return Promise.resolve(sorted.map((user) => new UserItem(user)));
   }
 };
-var UserItem = class extends vscode3.TreeItem {
+var UserItem = class extends vscode4.TreeItem {
   constructor(user) {
-    super(user.username, vscode3.TreeItemCollapsibleState.None);
+    super(user.username, vscode4.TreeItemCollapsibleState.None);
     this.user = user;
-    const parts = [];
-    if (user.activity) parts.push(user.activity);
-    if (user.project && user.project !== "Hidden") parts.push(user.project);
-    if (user.language && user.language !== "Hidden") parts.push(`(${user.language})`);
-    this.description = parts.join(" \u2022 ");
-    this.tooltip = new vscode3.MarkdownString(
-      `**${user.username}**
-
-Status: ${user.status}
-Activity: ${user.activity}
-` + (user.project && user.project !== "Hidden" ? `Project: ${user.project}
-` : "") + (user.language && user.language !== "Hidden" ? `Language: ${user.language}` : "")
-    );
-    if (user.status === "Online") {
-      this.iconPath = new vscode3.ThemeIcon("record", new vscode3.ThemeColor("charts.green"));
-    } else if (user.status === "Away") {
-      this.iconPath = new vscode3.ThemeIcon("record", new vscode3.ThemeColor("charts.yellow"));
-    } else {
-      this.iconPath = new vscode3.ThemeIcon("circle-outline", new vscode3.ThemeColor("charts.gray"));
-    }
+    this.description = buildUserDescription(user);
+    this.tooltip = buildUserTooltip(user);
+    this.iconPath = getUserStatusIcon(user.status);
     this.contextValue = "explorerUser";
   }
 };
 
 // src/activityTracker.ts
-var vscode4 = __toESM(require("vscode"));
+var vscode5 = __toESM(require("vscode"));
 var ActivityTracker = class {
   // 5 seconds before marking as Idle on blur
   constructor(statusUpdateCallback) {
@@ -4422,8 +4399,8 @@ var ActivityTracker = class {
     this.initialize();
   }
   initialize() {
-    this.isWindowFocused = vscode4.window.state.focused;
-    vscode4.window.onDidChangeWindowState((state) => {
+    this.isWindowFocused = vscode5.window.state.focused;
+    vscode5.window.onDidChangeWindowState((state) => {
       const wasFocused = this.isWindowFocused;
       this.isWindowFocused = state.focused;
       console.log(`Window focus changed: ${wasFocused} -> ${this.isWindowFocused}`);
@@ -4455,25 +4432,25 @@ var ActivityTracker = class {
         }, this.FOCUS_LOST_DELAY);
       }
     });
-    vscode4.window.onDidChangeActiveTextEditor(() => {
+    vscode5.window.onDidChangeActiveTextEditor(() => {
       if (this.isWindowFocused) {
         this.updateActivity();
       }
     });
-    vscode4.workspace.onDidChangeTextDocument((e) => {
+    vscode5.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.scheme === "file" && this.isWindowFocused) {
         this.currentActivity = "Coding";
         this.resetIdleTimer();
         this.updateActivity("Coding");
       }
     });
-    vscode4.debug.onDidStartDebugSession(() => {
+    vscode5.debug.onDidStartDebugSession(() => {
       if (this.isWindowFocused) {
         this.currentActivity = "Debugging";
         this.updateActivity("Debugging", true);
       }
     });
-    vscode4.debug.onDidTerminateDebugSession(() => {
+    vscode5.debug.onDidTerminateDebugSession(() => {
       if (this.isWindowFocused) {
         this.currentActivity = "Reading";
         this.updateActivity();
@@ -4494,14 +4471,14 @@ var ActivityTracker = class {
     if (!this.isWindowFocused) {
       return;
     }
-    const config = vscode4.workspace.getConfiguration("vscode-viscord");
+    const config = vscode5.workspace.getConfiguration("vscode-viscord");
     const shareProject = config.get("shareProjectName", true);
     const shareLanguage = config.get("shareLanguage", true);
     const shareActivity = config.get("shareActivity", true);
-    const editor = vscode4.window.activeTextEditor;
+    const editor = vscode5.window.activeTextEditor;
     let newStatus = {};
     if (editor) {
-      const project = shareProject ? vscode4.workspace.name || "No Project" : "Hidden";
+      const project = shareProject ? vscode5.workspace.name || "No Project" : "Hidden";
       const language = shareLanguage ? editor.document.languageId : "Hidden";
       let activity = activityOverride || this.currentActivity;
       if (!activityOverride && this.currentActivity === "Idle") {
@@ -4574,7 +4551,7 @@ var ActivityTracker = class {
 };
 
 // src/githubService.ts
-var vscode5 = __toESM(require("vscode"));
+var vscode6 = __toESM(require("vscode"));
 
 // node_modules/universal-user-agent/index.js
 function getUserAgent() {
@@ -8111,7 +8088,7 @@ var GitHubService = class {
   }
   // 15 minutes
   async authenticate() {
-    this.session = await vscode5.authentication.getSession("github", ["user:email", "read:user"], { createIfNone: true });
+    this.session = await vscode6.authentication.getSession("github", ["user:email", "read:user"], { createIfNone: true });
     this.octokit = new Octokit2({
       auth: this.session.accessToken
     });
@@ -8129,71 +8106,40 @@ var GitHubService = class {
       name: data.name || void 0
     };
   }
-  async getFollowers() {
-    if (this.cache.followers && this.cache.lastSync && Date.now() - this.cache.lastSync < this.CACHE_TTL) {
-      return this.cache.followers;
+  /**
+   * Fetch paginated GitHub users (followers or following)
+   */
+  async fetchPaginatedUsers(type) {
+    if (this.cache[type] && this.cache.lastSync && Date.now() - this.cache.lastSync < this.CACHE_TTL) {
+      return this.cache[type];
     }
     if (!this.octokit) {
       throw new Error("Not authenticated");
     }
-    const followers = [];
+    const users = [];
     let page = 1;
     const perPage = 100;
     while (true) {
-      const { data } = await this.octokit.users.listFollowersForAuthenticatedUser({
-        per_page: perPage,
-        page
-      });
-      if (data.length === 0) {
-        break;
-      }
-      followers.push(...data.map((user) => ({
+      const { data } = type === "followers" ? await this.octokit.users.listFollowersForAuthenticatedUser({ per_page: perPage, page }) : await this.octokit.users.listFollowedByAuthenticatedUser({ per_page: perPage, page });
+      if (data.length === 0) break;
+      users.push(...data.map((user) => ({
         id: user.id,
         login: user.login,
         avatar_url: user.avatar_url,
         name: user.name || void 0
       })));
-      if (data.length < perPage) {
-        break;
-      }
+      if (data.length < perPage) break;
       page++;
     }
-    this.cache.followers = followers;
+    this.cache[type] = users;
     this.cache.lastSync = Date.now();
-    return followers;
+    return users;
+  }
+  async getFollowers() {
+    return this.fetchPaginatedUsers("followers");
   }
   async getFollowing() {
-    if (this.cache.following && this.cache.lastSync && Date.now() - this.cache.lastSync < this.CACHE_TTL) {
-      return this.cache.following;
-    }
-    if (!this.octokit) {
-      throw new Error("Not authenticated");
-    }
-    const following = [];
-    let page = 1;
-    const perPage = 100;
-    while (true) {
-      const { data } = await this.octokit.users.listFollowedByAuthenticatedUser({
-        per_page: perPage,
-        page
-      });
-      if (data.length === 0) {
-        break;
-      }
-      following.push(...data.map((user) => ({
-        id: user.id,
-        login: user.login,
-        avatar_url: user.avatar_url,
-        name: user.name || void 0
-      })));
-      if (data.length < perPage) {
-        break;
-      }
-      page++;
-    }
-    this.cache.following = following;
-    this.cache.lastSync = Date.now();
-    return following;
+    return this.fetchPaginatedUsers("following");
   }
   getToken() {
     return this.session?.accessToken;
@@ -8232,22 +8178,18 @@ async function activate(context) {
   if (authState === "guest") {
     let username = context.globalState.get("guestUsername") || "";
     if (username) {
-      profile = {
-        login: username,
-        avatar_url: "https://avatars.githubusercontent.com/u/0?s=200&v=4",
-        html_url: ""
-      };
+      profile = createGuestProfile(username);
       isGitHubConnected = false;
     } else {
       authState = null;
     }
   }
   if (!profile) {
-    profile = { login: "", avatar_url: "", html_url: "" };
+    profile = { id: 0, login: "", avatar_url: "", html_url: "" };
   }
-  vscode6.commands.executeCommand("setContext", "vscode-viscord:githubConnected", isGitHubConnected);
-  vscode6.commands.executeCommand("setContext", "vscode-viscord:authenticated", authState !== null);
-  const statusBarItem = vscode6.window.createStatusBarItem(vscode6.StatusBarAlignment.Left, 100);
+  vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", isGitHubConnected);
+  vscode7.commands.executeCommand("setContext", "vscode-viscord:authenticated", authState !== null);
+  const statusBarItem = vscode7.window.createStatusBarItem(vscode7.StatusBarAlignment.Left, 100);
   if (authState) {
     statusBarItem.text = isGitHubConnected ? `$(account) ${profile.login}` : `$(account) ${profile.login} (Guest)`;
     statusBarItem.tooltip = "Click to copy username";
@@ -8257,10 +8199,10 @@ async function activate(context) {
   context.subscriptions.push(statusBarItem);
   const sidebarProvider = new SidebarProvider(context, profile, followers, following, githubService, isGitHubConnected, authState !== null);
   const githubViewProvider = new GitHubViewProvider(sidebarProvider);
-  context.subscriptions.push(vscode6.commands.registerCommand("vscode-viscord.continueAsGuest", async () => {
+  context.subscriptions.push(vscode7.commands.registerCommand("vscode-viscord.continueAsGuest", async () => {
     let username = context.globalState.get("guestUsername") || "";
     if (!username) {
-      const input = await vscode6.window.showInputBox({
+      const input = await vscode7.window.showInputBox({
         prompt: "Enter a username to continue as guest",
         placeHolder: "GuestUser123",
         validateInput: (value) => {
@@ -8274,20 +8216,16 @@ async function activate(context) {
       await context.globalState.update("guestUsername", username);
     }
     await context.globalState.update("authState", "guest");
-    vscode6.commands.executeCommand("setContext", "vscode-viscord:authenticated", true);
-    vscode6.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
-    const guestProfile = {
-      login: username,
-      avatar_url: "https://avatars.githubusercontent.com/u/0?s=200&v=4",
-      html_url: ""
-    };
+    vscode7.commands.executeCommand("setContext", "vscode-viscord:authenticated", true);
+    vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
+    const guestProfile = createGuestProfile(username);
     statusBarItem.text = `$(account) ${username} (Guest)`;
     statusBarItem.show();
     sidebarProvider.setAuthenticated(true);
     sidebarProvider.reconnectAsGuest(username);
-    vscode6.window.showInformationMessage(`Connected as guest: ${username}`);
+    vscode7.window.showInformationMessage(`Connected as guest: ${username}`);
   }));
-  context.subscriptions.push(vscode6.commands.registerCommand("vscode-viscord.connectGitHub", async () => {
+  context.subscriptions.push(vscode7.commands.registerCommand("vscode-viscord.connectGitHub", async () => {
     try {
       const session = await githubService.authenticate();
       const newProfile = await githubService.getProfile();
@@ -8295,36 +8233,36 @@ async function activate(context) {
       const newFollowing = await githubService.getFollowing();
       const guestUsername = context.globalState.get("guestUsername");
       await context.globalState.update("authState", "github");
-      vscode6.commands.executeCommand("setContext", "vscode-viscord:authenticated", true);
-      vscode6.commands.executeCommand("setContext", "vscode-viscord:githubConnected", true);
+      vscode7.commands.executeCommand("setContext", "vscode-viscord:authenticated", true);
+      vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", true);
       statusBarItem.text = `$(account) ${newProfile.login}`;
       statusBarItem.show();
       sidebarProvider.setAuthenticated(true);
       sidebarProvider.connectGitHub(newProfile, newFollowers, newFollowing, guestUsername);
       githubViewProvider.refresh();
-      vscode6.window.showInformationMessage(`Connected to GitHub as ${newProfile.login}`);
+      vscode7.window.showInformationMessage(`Connected to GitHub as ${newProfile.login}`);
     } catch (error) {
-      vscode6.window.showErrorMessage("Failed to connect to GitHub");
+      vscode7.window.showErrorMessage("Failed to connect to GitHub");
       console.error("GitHub connection failed:", error);
     }
   }));
-  const friendsTreeView = vscode6.window.createTreeView("viscord-friends", {
+  const friendsTreeView = vscode7.window.createTreeView("viscord-friends", {
     treeDataProvider: sidebarProvider,
     showCollapseAll: true
   });
   context.subscriptions.push(friendsTreeView);
-  const githubTreeView = vscode6.window.createTreeView("viscord-github", {
+  const githubTreeView = vscode7.window.createTreeView("viscord-github", {
     treeDataProvider: githubViewProvider,
     showCollapseAll: true
   });
   context.subscriptions.push(githubTreeView);
-  const statusChangeEmitter = new vscode6.EventEmitter();
+  const statusChangeEmitter = new vscode7.EventEmitter();
   const statusProvider = {
     onDidChangeTreeData: statusChangeEmitter.event,
     getTreeItem: (element) => element,
     getChildren: () => {
       const status = sidebarProvider.connectionStatus;
-      const statusNode = new class extends vscode6.TreeItem {
+      const statusNode = new class extends vscode7.TreeItem {
         constructor() {
           let label;
           let icon;
@@ -8332,27 +8270,27 @@ async function activate(context) {
           switch (status) {
             case "connected":
               label = "Connected";
-              icon = new vscode6.ThemeIcon("check", new vscode6.ThemeColor("charts.green"));
+              icon = new vscode7.ThemeIcon("check", new vscode7.ThemeColor("charts.green"));
               tooltip = "Connected to server";
               break;
             case "connecting":
               label = "Connecting...";
-              icon = new vscode6.ThemeIcon("sync~spin", new vscode6.ThemeColor("charts.yellow"));
+              icon = new vscode7.ThemeIcon("sync~spin", new vscode7.ThemeColor("charts.yellow"));
               tooltip = "Connecting to server...";
               break;
             case "error":
               label = "Connection Error";
-              icon = new vscode6.ThemeIcon("error", new vscode6.ThemeColor("charts.red"));
+              icon = new vscode7.ThemeIcon("error", new vscode7.ThemeColor("charts.red"));
               tooltip = "Failed to connect. Click refresh to retry.";
               break;
             case "disconnected":
             default:
               label = "Disconnected";
-              icon = new vscode6.ThemeIcon("circle-outline", new vscode6.ThemeColor("charts.gray"));
+              icon = new vscode7.ThemeIcon("circle-outline", new vscode7.ThemeColor("charts.gray"));
               tooltip = "Not connected to server";
               break;
           }
-          super(label, vscode6.TreeItemCollapsibleState.None);
+          super(label, vscode7.TreeItemCollapsibleState.None);
           this.iconPath = icon;
           this.tooltip = tooltip;
           this.contextValue = "statusIndicator";
@@ -8361,7 +8299,7 @@ async function activate(context) {
       return Promise.resolve([statusNode]);
     }
   };
-  const statusTreeView = vscode6.window.createTreeView("viscord-status", {
+  const statusTreeView = vscode7.window.createTreeView("viscord-status", {
     treeDataProvider: statusProvider
   });
   context.subscriptions.push(statusTreeView);
@@ -8369,8 +8307,8 @@ async function activate(context) {
   sidebarProvider.onConnectionStatusChanged(() => {
     statusChangeEmitter.fire();
   });
-  vscode6.commands.registerCommand("vscode-viscord.resetExtension", async () => {
-    const confirm = await vscode6.window.showWarningMessage(
+  vscode7.commands.registerCommand("vscode-viscord.resetExtension", async () => {
+    const confirm = await vscode7.window.showWarningMessage(
       "This will sign you out of GitHub, clear all local data, and return the extension to its initial state. Continue?",
       { modal: true },
       "Yes, Reset Everything"
@@ -8380,27 +8318,27 @@ async function activate(context) {
       await context.globalState.update("authState", void 0);
       await context.globalState.update("guestUsername", void 0);
       await context.globalState.update("closeFriends", void 0);
-      vscode6.commands.executeCommand("setContext", "vscode-viscord:authenticated", false);
-      vscode6.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
+      vscode7.commands.executeCommand("setContext", "vscode-viscord:authenticated", false);
+      vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
       sidebarProvider.disconnect();
       sidebarProvider.setAuthenticated(false);
       statusBarItem.hide();
-      vscode6.window.showInformationMessage(
+      vscode7.window.showInformationMessage(
         "Extension reset complete. Please reload the window.",
         "Reload Window"
       ).then((selection) => {
         if (selection === "Reload Window") {
-          vscode6.commands.executeCommand("workbench.action.reloadWindow");
+          vscode7.commands.executeCommand("workbench.action.reloadWindow");
         }
       });
     }
   });
-  const config = vscode6.workspace.getConfiguration("vscode-viscord");
+  const config = vscode7.workspace.getConfiguration("vscode-viscord");
   const explorerProvider = new ExplorerPresenceProvider();
   if (config.get("showInExplorer", true)) {
-    vscode6.window.registerTreeDataProvider("viscord-explorer", explorerProvider);
+    vscode7.window.registerTreeDataProvider("viscord-explorer", explorerProvider);
   }
-  const onlineFriendsStatusBar = vscode6.window.createStatusBarItem(vscode6.StatusBarAlignment.Right, 99);
+  const onlineFriendsStatusBar = vscode7.window.createStatusBarItem(vscode7.StatusBarAlignment.Right, 99);
   onlineFriendsStatusBar.command = "workbench.view.extension.viscord-sidebar";
   onlineFriendsStatusBar.tooltip = "Click to view viscord";
   context.subscriptions.push(onlineFriendsStatusBar);
@@ -8438,9 +8376,9 @@ async function activate(context) {
     }
   });
   context.subscriptions.push({ dispose: () => activityTracker.dispose() });
-  const configWatcher = vscode6.workspace.onDidChangeConfiguration((e) => {
+  const configWatcher = vscode7.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration("vscode-viscord")) {
-      const config2 = vscode6.workspace.getConfiguration("vscode-viscord");
+      const config2 = vscode7.workspace.getConfiguration("vscode-viscord");
       if (e.affectsConfiguration("vscode-viscord.visibilityMode")) {
         const visibilityMode = config2.get("visibilityMode", "followers");
         sidebarProvider.sendMessage({
@@ -8458,48 +8396,51 @@ async function activate(context) {
     }
   });
   context.subscriptions.push(configWatcher);
-  vscode6.commands.registerCommand("vscode-viscord.refresh", () => {
+  vscode7.commands.registerCommand("vscode-viscord.refresh", () => {
     sidebarProvider.reconnect();
     sidebarProvider.refresh();
     githubViewProvider.refresh();
   });
-  vscode6.commands.registerCommand("vscode-viscord.pinCloseFriend", async (item) => {
+  vscode7.commands.registerCommand("vscode-viscord.pinCloseFriend", async (item) => {
     if (item && item.user) {
       sidebarProvider.addCloseFriend(item.user.username);
-      vscode6.window.showInformationMessage(`Pinned ${item.user.username} to Close Friends`);
+      vscode7.window.showInformationMessage(`Pinned ${item.user.username} to Close Friends`);
     }
   });
-  vscode6.commands.registerCommand("vscode-viscord.unpinCloseFriend", (item) => {
+  vscode7.commands.registerCommand("vscode-viscord.unpinCloseFriend", (item) => {
     if (item && item.user) {
       sidebarProvider.removeCloseFriend(item.user.username);
-      vscode6.window.showInformationMessage(`Unpinned ${item.user.username} from Close Friends`);
+      vscode7.window.showInformationMessage(`Unpinned ${item.user.username} from Close Friends`);
     }
   });
-  vscode6.commands.registerCommand("vscode-viscord.copyUsername", () => {
+  vscode7.commands.registerCommand("vscode-viscord.copyUsername", () => {
     const currentProfile = sidebarProvider.getProfile();
     if (currentProfile && currentProfile.login) {
-      vscode6.env.clipboard.writeText(currentProfile.login);
-      vscode6.window.showInformationMessage(`Username copied: ${currentProfile.login}`);
+      vscode7.env.clipboard.writeText(currentProfile.login);
+      vscode7.window.showInformationMessage(`Username copied: ${currentProfile.login}`);
     }
   });
-  vscode6.commands.registerCommand("vscode-viscord.logout", async () => {
+  const signOutOfGitHub = async (message) => {
     await githubService.signOut();
     await context.globalState.update("authState", "guest");
-    vscode6.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
+    vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
     const guestUsername = context.globalState.get("guestUsername") || "Guest";
     statusBarItem.text = `$(account) ${guestUsername} (Guest)`;
     sidebarProvider.disconnectGitHub(guestUsername);
     githubViewProvider.refresh();
-    vscode6.window.showInformationMessage(`Logged out of GitHub. Manual connections preserved.`);
+    vscode7.window.showInformationMessage(message);
+  };
+  vscode7.commands.registerCommand("vscode-viscord.logout", async () => {
+    await signOutOfGitHub("Logged out of GitHub. Manual connections preserved.");
   });
-  vscode6.commands.registerCommand("vscode-viscord.openSettings", () => {
-    vscode6.commands.executeCommand("workbench.action.openSettings", "vscode-viscord");
+  vscode7.commands.registerCommand("vscode-viscord.openSettings", () => {
+    vscode7.commands.executeCommand("workbench.action.openSettings", "vscode-viscord");
   });
-  vscode6.commands.registerCommand("vscode-viscord.createInvite", () => {
+  vscode7.commands.registerCommand("vscode-viscord.createInvite", () => {
     sidebarProvider.sendMessage({ type: "createInvite" });
   });
-  vscode6.commands.registerCommand("vscode-viscord.acceptInvite", async () => {
-    const code = await vscode6.window.showInputBox({
+  vscode7.commands.registerCommand("vscode-viscord.acceptInvite", async () => {
+    const code = await vscode7.window.showInputBox({
       prompt: "Enter invite code",
       placeHolder: "ABC123",
       validateInput: (value) => {
@@ -8511,12 +8452,12 @@ async function activate(context) {
       sidebarProvider.sendMessage({ type: "acceptInvite", code: code.toUpperCase() });
     }
   });
-  vscode6.commands.registerCommand("vscode-viscord.removeConnection", async (item) => {
+  vscode7.commands.registerCommand("vscode-viscord.removeConnection", async (item) => {
     if (!item || !item.user) {
-      vscode6.window.showErrorMessage("No user selected");
+      vscode7.window.showErrorMessage("No user selected");
       return;
     }
-    const confirm = await vscode6.window.showWarningMessage(
+    const confirm = await vscode7.window.showWarningMessage(
       `Remove connection with ${item.user.username}?`,
       "Yes, Remove",
       "Cancel"
@@ -8526,11 +8467,11 @@ async function activate(context) {
         type: "removeConnection",
         username: item.user.username
       });
-      vscode6.window.showInformationMessage(`Removed connection with ${item.user.username}`);
+      vscode7.window.showInformationMessage(`Removed connection with ${item.user.username}`);
     }
   });
-  vscode6.commands.registerCommand("vscode-viscord.reset", async () => {
-    const confirm = await vscode6.window.showWarningMessage(
+  vscode7.commands.registerCommand("vscode-viscord.reset", async () => {
+    const confirm = await vscode7.window.showWarningMessage(
       "This will clear all local data. Continue?",
       "Yes, Reset",
       "Cancel"
@@ -8539,11 +8480,11 @@ async function activate(context) {
       await context.globalState.update("authState", void 0);
       await context.globalState.update("guestUsername", void 0);
       await context.globalState.update("closeFriends", void 0);
-      vscode6.window.showInformationMessage("Data cleared. Reload window.");
+      vscode7.window.showInformationMessage("Data cleared. Reload window.");
     }
   });
-  vscode6.commands.registerCommand("vscode-viscord.clearCache", async () => {
-    const confirm = await vscode6.window.showInformationMessage(
+  vscode7.commands.registerCommand("vscode-viscord.clearCache", async () => {
+    const confirm = await vscode7.window.showInformationMessage(
       "Clear cached data and refresh? Your authentication will be preserved.",
       "Clear Cache",
       "Cancel"
@@ -8553,24 +8494,17 @@ async function activate(context) {
       sidebarProvider.reconnect();
       sidebarProvider.refresh();
       githubViewProvider.refresh();
-      vscode6.window.showInformationMessage("Cache cleared and refreshed!");
+      vscode7.window.showInformationMessage("Cache cleared and refreshed!");
     }
   });
-  vscode6.commands.registerCommand("vscode-viscord.signOutGitHub", async () => {
-    const confirm = await vscode6.window.showWarningMessage(
+  vscode7.commands.registerCommand("vscode-viscord.signOutGitHub", async () => {
+    const confirm = await vscode7.window.showWarningMessage(
       "Sign out of GitHub? You will switch to guest mode.",
       "Sign Out",
       "Cancel"
     );
     if (confirm === "Sign Out") {
-      await githubService.signOut();
-      await context.globalState.update("authState", "guest");
-      vscode6.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
-      const guestUsername = context.globalState.get("guestUsername") || "Guest";
-      statusBarItem.text = `$(account) ${guestUsername} (Guest)`;
-      sidebarProvider.disconnectGitHub(guestUsername);
-      githubViewProvider.refresh();
-      vscode6.window.showInformationMessage("Signed out of GitHub. Your manual connections are preserved.");
+      await signOutOfGitHub("Signed out of GitHub. Your manual connections are preserved.");
     }
   });
 }
