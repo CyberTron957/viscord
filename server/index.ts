@@ -320,6 +320,9 @@ wss.on('connection', (ws, req) => {
                     dbService.removeManualConnection(resolvedClient, resolvedTarget);
                     console.log(`Removed manual connection: ${resolvedClient} <-> ${resolvedTarget}`);
 
+                    // Invalidate offline user cache to ensure the removed user doesn't appear
+                    invalidateOfflineCache();
+
                     ws.send(JSON.stringify({
                         type: 'connectionRemoved',
                         success: true,
@@ -389,6 +392,11 @@ interface OfflineUserCache {
 
 const offlineUserCache = new Map<number, OfflineUserCache>();
 const OFFLINE_CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+// Clear the offline user cache (call when connections change)
+function invalidateOfflineCache() {
+    offlineUserCache.clear();
+}
 
 function getCachedOfflineUsers(githubId: number, followers: number[], following: number[]): any[] {
     const cached = offlineUserCache.get(githubId);

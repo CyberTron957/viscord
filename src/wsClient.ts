@@ -136,6 +136,17 @@ export class WsClient {
                                 message.error || 'Failed to accept invite code'
                             );
                         }
+                    } else if (message.type === 'connectionRemoved') {
+                        if (message.success) {
+                            vscode.window.showInformationMessage(
+                                `Removed connection with ${message.username}`
+                            );
+                            // The server will broadcast an updated user list
+                        } else {
+                            vscode.window.showErrorMessage(
+                                message.error || 'Failed to remove connection'
+                            );
+                        }
                     }
                 } catch (e) {
                     console.error('Error parsing message', e);

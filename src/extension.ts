@@ -165,7 +165,9 @@ export async function activate(context: vscode.ExtensionContext) {
     context.subscriptions.push(githubTreeView);
 
     // 3. Connection Status View
-    const statusProvider = {
+    const statusChangeEmitter = new vscode.EventEmitter<void>();
+    const statusProvider: vscode.TreeDataProvider<vscode.TreeItem> = {
+        onDidChangeTreeData: statusChangeEmitter.event,
         getTreeItem: (element: vscode.TreeItem) => element,
         getChildren: () => {
             const status = sidebarProvider.connectionStatus;
@@ -213,12 +215,11 @@ export async function activate(context: vscode.ExtensionContext) {
         treeDataProvider: statusProvider
     });
     context.subscriptions.push(statusTreeView);
+    context.subscriptions.push(statusChangeEmitter);
 
     // Listen to connection status changes and refresh status view
     sidebarProvider.onConnectionStatusChanged(() => {
-        (statusProvider as any)._onDidChangeTreeData?.fire();
-        // Trigger refresh by recreating the tree
-        vscode.commands.executeCommand('setContext', 'vscode-viscord:statusChanged', Date.now());
+        statusChangeEmitter.fire();
     });
 
     // ... (rest of code)
