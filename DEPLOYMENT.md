@@ -17,6 +17,11 @@ This guide explains how to deploy the VS Code viscord server securely using Cadd
 curl -fsSL https://deb.nodesource.com/setup_18.x | sudo -E bash -
 sudo apt-get install -y nodejs
 
+# Install Redis (recommended for performance)
+sudo apt-get install -y redis-server
+sudo systemctl enable redis-server
+sudo systemctl start redis-server
+
 # Install PM2 (Process Manager)
 sudo npm install -g pm2
 ```
@@ -30,6 +35,12 @@ cd /var/www/viscord
 # Install dependencies
 npm ci --production
 
+# Install server dependencies
+cd server && npm ci --production && cd ..
+
+# Compile server TypeScript
+npm run compile:server
+
 # Create database directory
 mkdir -p data
 ```
@@ -40,7 +51,14 @@ Create a `.env` file:
 PORT=8080
 NODE_ENV=production
 DB_PATH=./data/database.sqlite
-# Optional: Add any other required env vars
+
+# Redis Configuration (optional but recommended)
+REDIS_URL=redis://localhost:6379
+REDIS_PREFIX=viscord:
+USE_REDIS=true
+
+# Set to true to disable Redis and use legacy broadcast
+USE_LEGACY_BROADCAST=false
 ```
 
 ## 2. Secure Reverse Proxy with Caddy

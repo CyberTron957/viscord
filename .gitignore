@@ -1,12 +1,40 @@
+# Build outputs
 out
+dist
+
+# Dependencies
 node_modules
+
+# VS Code
 .vscode-test
-*.vsix
-.DS_Store
 .vscode
+
+# Extension packages
+*.vsix
+
+# macOS
+.DS_Store
+
+# Database
 database.sqlite
 database.sqlite-shm
 database.sqlite-wal
+
+# Environment
 .env
+
+# Logs
 logs/
 *.log
+
+# Redis
+*.rdb
+dump.rdb
+
+# Backups
+backups/
+
+# Server compiled JS (keep .ts source)
+server/*.js
+server/*.js.map
+!server/package.json

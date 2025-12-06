@@ -11,6 +11,8 @@ export class ActivityTracker {
     private pendingUpdate: NodeJS.Timeout | null = null;
     private currentActivity: string = 'Idle'; // Track current activity state
     private isWindowFocused: boolean = true; // Track if this VS Code window is focused
+    private focusLostTimer: NodeJS.Timeout | null = null; // Delay before sending Idle on blur
+    private readonly FOCUS_LOST_DELAY = 5000; // 5 seconds before marking as Idle on blur
 
     constructor(statusUpdateCallback: (status: Partial<UserStatus>) => void) {
         this.statusUpdateCallback = statusUpdateCallback;
@@ -29,19 +31,38 @@ export class ActivityTracker {
             console.log(`Window focus changed: ${wasFocused} -> ${this.isWindowFocused}`);
 
             if (this.isWindowFocused && !wasFocused) {
-                // Window just gained focus - immediately update with current state
+                // Window just gained focus - cancel any pending Idle and restore status
+                if (this.focusLostTimer) {
+                    clearTimeout(this.focusLostTimer);
+                    this.focusLostTimer = null;
+                    console.log('Window regained focus - cancelled Idle timer');
+                }
+                // Immediately update with current state
                 console.log('Window gained focus - sending current status');
                 this.updateActivity(this.currentActivity, true); // Force immediate update
             } else if (!this.isWindowFocused && wasFocused) {
-                // Window just lost focus - immediately send Idle
-                console.log('Window lost focus - sending Idle status');
-                this.currentActivity = 'Idle';
-                this.statusUpdateCallback({
-                    activity: 'Idle',
-                    status: 'Away',
-                    project: '',
-                    language: ''
-                });
+                // Window just lost focus - delay before sending Idle
+                // This prevents status flapping when quickly switching windows
+                console.log('Window lost focus - starting Idle timer');
+
+                if (this.focusLostTimer) {
+                    clearTimeout(this.focusLostTimer);
+                }
+
+                this.focusLostTimer = setTimeout(() => {
+                    this.focusLostTimer = null;
+                    // Only send Idle if still unfocused
+                    if (!this.isWindowFocused) {
+                        console.log('Idle timer expired - sending Idle status');
+                        this.currentActivity = 'Idle';
+                        this.statusUpdateCallback({
+                            activity: 'Idle',
+                            status: 'Away',
+                            project: '',
+                            language: ''
+                        });
+                    }
+                }, this.FOCUS_LOST_DELAY);
             }
         });
 
@@ -66,7 +87,8 @@ export class ActivityTracker {
         vscode.debug.onDidStartDebugSession(() => {
             if (this.isWindowFocused) {
                 this.currentActivity = 'Debugging';
-                this.statusUpdateCallback({ activity: 'Debugging', status: 'Online' });
+                // Force an immediate full status update
+                this.updateActivity('Debugging', true);
             }
         });
 
@@ -193,6 +215,9 @@ export class ActivityTracker {
         }
         if (this.pendingUpdate) {
             clearTimeout(this.pendingUpdate);
+        }
+        if (this.focusLostTimer) {
+            clearTimeout(this.focusLostTimer);
         }
     }
 }

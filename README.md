@@ -55,10 +55,14 @@ A VS Code extension that shows your GitHub friends' real-time coding status! See
 - Max 10 reconnection attempts
 
 ### ⚡ Performance Optimized
+- **Redis Pub/Sub**: Real-time updates via Redis for horizontal scaling
+- **Delta Updates**: Only changed fields sent (not full user list)
 - **Broadcast Debouncing**: Batches rapid updates to reduce network traffic
 - **Offline User Caching**: Reduces database queries by 99%
-- **Batched Writes**: Reduces disk I/O by 90%
+- **Write-Behind Pattern**: Fast Redis writes, periodic SQLite persistence
 - **Smart Throttling**: 5-second throttle for general updates, immediate for coding/debugging
+- **Heartbeat System**: 30-second ping/pong for fast dead connection detection
+- **Session Resumption**: Silent reconnection within 60 seconds (no flapping)
 - Handles 1,000+ concurrent users smoothly
 
 ## 🚀 Getting Started
@@ -111,18 +115,42 @@ The extension requires a WebSocket server. See [DEPLOYMENT.md](./DEPLOYMENT.md) 
  
 ### Quick Local Setup
 ```bash
-# Start the server
-node server/index.js
+# Install Redis (optional but recommended)
+brew install redis  # macOS
+# or: sudo apt install redis-server  # Ubuntu
+
+# Start Redis (in separate terminal)
+redis-server
+
+# Compile and start the server
+cd server
+npm run compile:server
+node index.js
  
 # Server runs on ws://localhost:8080
+# With Redis: Mode will show "Redis Pub/Sub"
+# Without Redis: Falls back to "Legacy Broadcast"
+```
+
+### Environment Variables
+```bash
+# Copy example and configure
+cp .env.example .env
+
+# Key variables:
+PORT=8080
+REDIS_URL=redis://localhost:6379
+USE_LEGACY_BROADCAST=false  # Set to true to disable Redis
 ```
  
 ### Production Deployment
 - Supports any Linux server (Ubuntu recommended)
+- **Redis** for Pub/Sub and caching (optional but recommended)
 - **Secure WSS** via Caddy reverse proxy
 - **Automatic SSL** with Let's Encrypt
 - **Automatic Backups** of database
 - Includes PM2 process management
+
  
 ## 📁 Project Structure
  
@@ -130,16 +158,18 @@ node server/index.js
 viscord/
 ├── src/
 │   ├── extension.ts          # Extension entry point
-│   ├── githubService.ts       # GitHub OAuth & API
-│   ├── sidebarProvider.ts     # Multi-tab tree view
-│   ├── activityTracker.ts     # Activity detection
-│   └── wsClient.ts            # WebSocket client
+│   ├── githubService.ts      # GitHub OAuth & API
+│   ├── sidebarProvider.ts    # Multi-tab tree view
+│   ├── activityTracker.ts    # Activity detection
+│   └── wsClient.ts           # WebSocket client (handles delta updates)
 ├── server/
-│   ├── index.ts               # WebSocket server
-│   ├── database.ts            # SQLite persistence
-│   └── rateLimiter.ts         # Anti-abuse protection
-├── package.json               # Extension manifest
-└── tsconfig.json              # TypeScript config
+│   ├── index.ts              # WebSocket server (heartbeats, session resumption)
+│   ├── database.ts           # SQLite persistence
+│   ├── redisService.ts       # Redis Pub/Sub, caching, sessions
+│   └── rateLimiter.ts        # Anti-abuse protection
+├── .env.example              # Environment variable template
+├── package.json              # Extension manifest
+└── tsconfig.json             # TypeScript config
 ```
  
 ## 🔧 Development

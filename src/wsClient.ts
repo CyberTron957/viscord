@@ -25,6 +25,11 @@ export class WsClient {
     private lastSentStatus: string = '';
     private sessionId: string;
     private _connectionStatus: ConnectionStatus = 'disconnected';
+    // Session resumption
+    private resumeToken: string | null = null;
+    private resumeTokenExpiry: number = 0;
+    // Client-side state for delta updates
+    private users: Map<string, UserStatus> = new Map();
 
     constructor(
         onUserListUpdate: (users: UserStatus[]) => void,
@@ -99,19 +104,100 @@ export class WsClient {
                 const config = vscode.workspace.getConfiguration('vscode-viscord');
                 const visibilityMode = config.get<string>('visibilityMode', 'everyone');
 
-                this.send({
+                // Build login message with optional resume token
+                const loginMessage: any = {
                     type: 'login',
                     username: this.username,
                     token: this.token,
                     visibilityMode: visibilityMode,
                     sessionId: this.sessionId
-                });
+                };
+
+                // Include resume token if we have a valid one (for graceful reconnection)
+                if (this.resumeToken && Date.now() < this.resumeTokenExpiry) {
+                    loginMessage.resumeToken = this.resumeToken;
+                    console.log('Attempting session resumption with token');
+                }
+
+                this.send(loginMessage);
             });
 
             this.ws.on('message', (data) => {
                 try {
                     const message = JSON.parse(data.toString());
+
+                    // Handle heartbeat - respond immediately
+                    if (message.t === 'hb') {
+                        if (!message.ack) {
+                            // Server sent ping, respond with pong
+                            this.send({ t: 'hb', ts: message.ts });
+                        }
+                        // If ack is true, this is the server acknowledging our heartbeat
+                        return;
+                    }
+
+                    // Handle resume token from server
+                    if (message.t === 'token' || message.type === 'resumeToken') {
+                        this.resumeToken = message.token;
+                        this.resumeTokenExpiry = Date.now() + 60000; // 60 second validity
+                        console.log('Received resume token');
+                        return;
+                    }
+
+                    // Handle delta updates (new efficient protocol)
+                    if (message.t === 'u') {
+                        // Delta update - merge into existing user
+                        const existing = this.users.get(message.id);
+                        if (existing) {
+                            if (message.s) existing.status = message.s;
+                            if (message.a) existing.activity = message.a;
+                            if (message.p !== undefined) existing.project = message.p;
+                            if (message.l !== undefined) existing.language = message.l;
+                            this.onUserListUpdate(Array.from(this.users.values()));
+                        }
+                        return;
+                    }
+
+                    if (message.t === 'o') {
+                        // User came online
+                        this.users.set(message.id, {
+                            username: message.id,
+                            status: message.s || 'Online',
+                            activity: message.a || 'Idle',
+                            project: message.p || '',
+                            language: message.l || ''
+                        });
+                        this.onUserListUpdate(Array.from(this.users.values()));
+                        return;
+                    }
+
+                    if (message.t === 'x') {
+                        // User went offline - update status, don't remove
+                        const user = this.users.get(message.id);
+                        if (user) {
+                            user.status = 'Offline';
+                            user.lastSeen = message.ts;
+                            this.onUserListUpdate(Array.from(this.users.values()));
+                        }
+                        return;
+                    }
+
+                    if (message.t === 'sync') {
+                        // Full state sync - replace entire user map
+                        this.users.clear();
+                        for (const user of message.users) {
+                            this.users.set(user.username, user);
+                        }
+                        this.onUserListUpdate(Array.from(this.users.values()));
+                        return;
+                    }
+
                     if (message.type === 'userList') {
+                        // Legacy full list update - also update our local map
+                        this.users.clear();
+                        for (const user of message.users) {
+                            this.users.set(user.username, user);
+                        }
                         this.onUserListUpdate(message.users);
                     } else if (message.type === 'friendJoined') {
                         console.log('Friend joined:', message.user);

@@ -1,8 +1,8 @@
 {
-  "name": "viscord",
+  "name": "Viscord",
   "displayName": "Viscord",
   "description": "See your GitHub friends' real-time coding status in VS Code. Know what your followers and following are working on!",
-  "version": "1.0.0",
+  "version": "1.0.1",
   "publisher": "CyberTron957",
   "author": {
     "name": "Pradhyun"
@@ -327,6 +327,7 @@
   "dependencies": {
     "@octokit/rest": "^22.0.1",
     "better-sqlite3": "^12.5.0",
+    "ioredis": "^5.8.2",
     "sqlite3": "^5.1.7",
     "ws": "^8.13.0"
   }
