@@ -1,4 +1,8 @@
 # Viscord 👥
+<img width="800" alt="viscord_marketplace_hero_1765087439708" src="https://github.com/user-attachments/assets/cf450bfa-5f09-4d45-af4b-2e8f3e0fbe4a" />
+
+<img width="400" alt="Generated Image December 07, 2025 - 3_01P" src="https://github.com/user-attachments/assets/c30d1dc1-10d8-461f-8406-a701ca9fa803" />
+
 
 A VS Code extension that shows your GitHub friends' real-time coding status! See what your followers and following are working on, all within VS Code.
 
