@@ -6,70 +6,14 @@
 
 A VS Code extension that shows your GitHub friends' real-time coding status! See what your followers and following are working on, all within VS Code.
 
-## ✨ Features
+[Download from VS Code Extension Marketplace](https://marketplace.visualstudio.com/items?itemName=CyberTron957.viscord)
 
-### 🔐 GitHub Authentication
-- **One-click login** using VS Code's built-in GitHub OAuth
-- **Auto-discovery**: Automatically finds which of your GitHub followers/following are using the extension
-- **Guest Mode**: Use invite codes to connect without GitHub
-- **Real-time notifications** when friends come online
 
-### 📊 Multi-Tab Sidebar
-- **Close Friends**: Pin your favorite collaborators for quick access
-- **Following**: See GitHub users you follow who are online
-- **Followers**: See your GitHub followers who are coding
-- **All Users**: Browse all active users
-- **Offline Users**: See when friends were last active (up to 7 days)
 
-### 🪟 Multiple Windows Support
-- **Smart Aggregation**: Open multiple VS Code windows with different projects
-- **Window Focus Tracking**: Automatically updates status based on the active window
-- **Activity Priority**: Shows your most active status (Debugging > Coding > Reading > Idle)
-- **Seamless Experience**: Friends see one unified status across all your windows
 
-### 🔒 Privacy Controls
-- **Visibility Modes**:
-  - `Everyone`: All users can see your status (default)
-  - `Followers Only`: Only your GitHub followers can see you
-  - `Following Only`: Only people you follow can see you
-  - `Close Friends`: Only pinned friends can see you
-  - `Invisible`: No one can see you online
 
-- **Granular Sharing**:
-  - Share/hide project name
-  - Share/hide programming language
-  - Share/hide activity (Coding, Debugging, Idle)
+# To test locally:
 
-### 💾 Persistent Data
-- Friend lists saved across sessions
-- **Last seen timestamps** for offline users (shows "Last seen 5m ago")
-- **Automatic Backups**: Database backed up every 6 hours (production)
-- SQLite database for reliable storage
-- Privacy preferences synced automatically
-
-### 🛡️ Rate Limiting & Security
-- Connection rate limiting (5 attempts/minute per IP)
-- Message rate limiting (60 messages/minute per user)
-- Server-side GitHub token validation
-- Graceful error handling
-
-### 🔄 Automatic Reconnection
-- Exponential backoff retry logic
-- Handles network interruptions gracefully
-- Max 10 reconnection attempts
-
-### ⚡ Performance Optimized
-- **Redis Pub/Sub**: Real-time updates via Redis for horizontal scaling
-- **Delta Updates**: Only changed fields sent (not full user list)
-- **Broadcast Debouncing**: Batches rapid updates to reduce network traffic
-- **Offline User Caching**: Reduces database queries by 99%
-- **Write-Behind Pattern**: Fast Redis writes, periodic SQLite persistence
-- **Smart Throttling**: 5-second throttle for general updates, immediate for coding/debugging
-- **Heartbeat System**: 30-second ping/pong for fast dead connection detection
-- **Session Resumption**: Silent reconnection within 60 seconds (no flapping)
-- Handles 1,000+ concurrent users smoothly
-
-## 🚀 Getting Started
 
 ### Installation
 
