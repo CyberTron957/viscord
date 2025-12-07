@@ -252,15 +252,6 @@ export class WsClient {
                     else if (message.type === 'chatMessageReceived') {
                         // Incoming message from another user
                         this.onChatMessageReceived(message.message);
-                        // Show notification
-                        vscode.window.showInformationMessage(
-                            `💬 ${message.message.from_username}: ${message.message.message.substring(0, 50)}${message.message.message.length > 50 ? '...' : ''}`,
-                            'Open Chat'
-                        ).then((selection: string | undefined) => {
-                            if (selection === 'Open Chat') {
-                                vscode.commands.executeCommand('vscode-viscord.openChat', message.message.from_username);
-                            }
-                        });
                     } else if (message.type === 'chatMessageSent') {
                         // Confirmation that our message was sent
                         this.onChatMessageReceived(message.message);

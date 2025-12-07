@@ -1,7 +1,7 @@
 import * as vscode from 'vscode';
 import { SidebarProvider, GitHubViewProvider } from './sidebarProvider';
 import { ExplorerPresenceProvider } from './explorerPresenceProvider';
-import { ChatProvider } from './chatProvider';
+import { ChatWebviewProvider } from './chatWebviewProvider';
 import { ActivityTracker } from './activityTracker';
 import { GitHubService } from './githubService';
 import { createGuestProfile, GUEST_AVATAR_URL } from './utils';
@@ -75,18 +75,26 @@ export async function activate(context: vscode.ExtensionContext) {
     const sidebarProvider = new SidebarProvider(context, profile, followers, following, githubService, isGitHubConnected, authState !== null);
     const githubViewProvider = new GitHubViewProvider(sidebarProvider);
 
-    // Initialize Chat Provider
-    const chatProvider = new ChatProvider(sidebarProvider.getWsClient());
-    chatProvider.setCurrentUsername(profile.login || '');
+    // Initialize Chat Webview Provider
+    const chatWebviewProvider = new ChatWebviewProvider(context.extensionUri, sidebarProvider.getWsClient());
+    chatWebviewProvider.setCurrentUsername(profile.login || '');
 
     // Connect chat message handler
     sidebarProvider.setOnChatMessage((message) => {
-        chatProvider.onMessageReceived(message);
+        chatWebviewProvider.onMessageReceived(message);
+
+        // If message is from someone else and not currently viewing their chat, increment unread
+        if (message.from_username !== (profile.login || '')) {
+            // Check if chat is open with this user
+            if (!chatWebviewProvider.isActiveChatWith(message.from_username)) {
+                sidebarProvider.incrementUnread(message.from_username);
+            }
+        }
     });
 
-    // Register Chat View
+    // Register Chat Webview
     context.subscriptions.push(
-        vscode.window.registerTreeDataProvider('viscord-chat', chatProvider)
+        vscode.window.registerWebviewViewProvider('viscord-chat', chatWebviewProvider)
     );
 
     // *** CRITICAL: Register welcome view commands IMMEDIATELY after providers are initialized ***
@@ -509,24 +517,31 @@ export async function activate(context: vscode.ExtensionContext) {
 
     // Open chat with a specific user
     vscode.commands.registerCommand('vscode-viscord.openChat', (item: any) => {
+        let username: string | null = null;
+
         if (item && item.user && item.user.username) {
-            chatProvider.openChat(item.user.username);
+            username = item.user.username;
         } else if (typeof item === 'string') {
-            // Called with username string directly
-            chatProvider.openChat(item);
+            username = item;
+        }
+
+        if (username) {
+            chatWebviewProvider.openChat(username);
+            sidebarProvider.clearUnread(username);
         }
     });
 
-    // Send a chat message
+    // Send a chat message (handled by webview, but command still available)
     vscode.commands.registerCommand('vscode-viscord.sendChatMessage', async (toUsername?: string) => {
         if (toUsername) {
-            await chatProvider.sendMessage(toUsername);
+            // Open chat first, then the webview handles the input
+            chatWebviewProvider.openChat(toUsername);
         }
     });
 
     // Close active chat
     vscode.commands.registerCommand('vscode-viscord.closeChat', () => {
-        chatProvider.closeChat();
+        chatWebviewProvider.closeChat();
     });
 }
 

@@ -222,6 +222,7 @@
         {
           "id": "viscord-chat",
           "name": "Chat",
+          "type": "webview",
           "icon": "$(comment-discussion)"
         }
       ],

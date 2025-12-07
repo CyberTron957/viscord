@@ -2227,7 +2227,7 @@ var require_extension = __commonJS({
 var require_websocket = __commonJS({
   "node_modules/ws/lib/websocket.js"(exports2, module2) {
     "use strict";
-    var EventEmitter5 = require("events");
+    var EventEmitter4 = require("events");
     var https = require("https");
     var http = require("http");
     var net = require("net");
@@ -2259,7 +2259,7 @@ var require_websocket = __commonJS({
     var protocolVersions = [8, 13];
     var readyStates = ["CONNECTING", "OPEN", "CLOSING", "CLOSED"];
     var subprotocolRegex = /^[!#$%&'*+\-.0-9A-Z^_`|a-z~]+$/;
-    var WebSocket2 = class _WebSocket extends EventEmitter5 {
+    var WebSocket2 = class _WebSocket extends EventEmitter4 {
       /**
        * Create a new `WebSocket`.
        *
@@ -3253,7 +3253,7 @@ var require_subprotocol = __commonJS({
 var require_websocket_server = __commonJS({
   "node_modules/ws/lib/websocket-server.js"(exports2, module2) {
     "use strict";
-    var EventEmitter5 = require("events");
+    var EventEmitter4 = require("events");
     var http = require("http");
     var { Duplex } = require("stream");
     var { createHash } = require("crypto");
@@ -3266,7 +3266,7 @@ var require_websocket_server = __commonJS({
     var RUNNING = 0;
     var CLOSING = 1;
     var CLOSED = 2;
-    var WebSocketServer2 = class extends EventEmitter5 {
+    var WebSocketServer2 = class extends EventEmitter4 {
       /**
        * Create a `WebSocketServer` instance.
        *
@@ -3741,7 +3741,7 @@ __export(extension_exports, {
   deactivate: () => deactivate
 });
 module.exports = __toCommonJS(extension_exports);
-var vscode8 = __toESM(require("vscode"));
+var vscode7 = __toESM(require("vscode"));
 
 // src/sidebarProvider.ts
 var vscode3 = __toESM(require("vscode"));
@@ -3935,14 +3935,6 @@ var WsClient = class {
             }
           } else if (message.type === "chatMessageReceived") {
             this.onChatMessageReceived(message.message);
-            vscode.window.showInformationMessage(
-              `\u{1F4AC} ${message.message.from_username}: ${message.message.message.substring(0, 50)}${message.message.message.length > 50 ? "..." : ""}`,
-              "Open Chat"
-            ).then((selection) => {
-              if (selection === "Open Chat") {
-                vscode.commands.executeCommand("vscode-viscord.openChat", message.message.from_username);
-              }
-            });
           } else if (message.type === "chatMessageSent") {
             this.onChatMessageReceived(message.message);
           } else if (message.type === "chatHistory") {
@@ -4092,6 +4084,7 @@ function getUserStatusIcon(status) {
 
 // src/sidebarProvider.ts
 var SidebarProvider = class {
+  // username -> unread count
   constructor(context, profile, followers, following, githubService, isGitHubConnected, isAuthenticated) {
     this._onDidChangeTreeData = new vscode3.EventEmitter();
     this.onDidChangeTreeData = this._onDidChangeTreeData.event;
@@ -4103,6 +4096,7 @@ var SidebarProvider = class {
     this.closeFriends = [];
     this._connectionStatus = "disconnected";
     this.onChatMessage = null;
+    this.unreadCounts = /* @__PURE__ */ new Map();
     this.context = context;
     this.profile = profile;
     this.followers = followers;
@@ -4145,6 +4139,21 @@ var SidebarProvider = class {
   }
   setOnChatMessage(callback) {
     this.onChatMessage = callback;
+  }
+  // Unread message tracking
+  incrementUnread(username) {
+    const current = this.unreadCounts.get(username) || 0;
+    this.unreadCounts.set(username, current + 1);
+    this.refresh();
+  }
+  clearUnread(username) {
+    if (this.unreadCounts.has(username)) {
+      this.unreadCounts.delete(username);
+      this.refresh();
+    }
+  }
+  getUnreadCount(username) {
+    return this.unreadCounts.get(username) || 0;
   }
   reconnect() {
     if (this.isAuthenticated) {
@@ -4221,7 +4230,7 @@ var SidebarProvider = class {
         users = this.allUsers.filter((u) => u.username !== this.profile.login);
         break;
     }
-    return users.map((u) => new UserNode(u, vscode3.TreeItemCollapsibleState.None, this.isManualConnection(u.username)));
+    return users.map((u) => new UserNode(u, vscode3.TreeItemCollapsibleState.None, this.isManualConnection(u.username), this.getUnreadCount(u.username)));
   }
   getFollowingUsers() {
     const followingLogins = this.following.map((f) => f.login.toLowerCase());
@@ -4347,7 +4356,7 @@ var GitHubViewProvider = class {
         users = this.sidebarProvider.getAllUsers().filter((u) => u.username !== this.sidebarProvider.getProfile().login);
         break;
     }
-    return users.map((u) => new UserNode(u, vscode3.TreeItemCollapsibleState.None));
+    return users.map((u) => new UserNode(u, vscode3.TreeItemCollapsibleState.None, false, this.sidebarProvider.getUnreadCount(u.username)));
   }
   getFollowingUsers() {
     const followingLogins = this.sidebarProvider.getFollowingList().map((f) => f.login.toLowerCase());
@@ -4369,11 +4378,15 @@ var Category = class extends vscode3.TreeItem {
   }
 };
 var UserNode = class extends vscode3.TreeItem {
-  constructor(user, collapsibleState, isManualConnection = false) {
+  constructor(user, collapsibleState, isManualConnection = false, unreadCount = 0) {
     super(user.username, collapsibleState);
     this.user = user;
     this.collapsibleState = collapsibleState;
-    this.description = buildUserDescription(user);
+    if (unreadCount > 0) {
+      this.description = `\u{1F535} ${buildUserDescription(user)}`;
+    } else {
+      this.description = buildUserDescription(user);
+    }
     this.tooltip = buildUserTooltip(user);
     this.iconPath = getUserStatusIcon(user.status);
     this.contextValue = isManualConnection ? "user-manual" : "user";
@@ -4430,46 +4443,69 @@ var UserItem = class extends vscode4.TreeItem {
   }
 };
 
-// src/chatProvider.ts
-var vscode5 = __toESM(require("vscode"));
-var ChatProvider = class {
-  constructor(wsClient) {
-    this._onDidChangeTreeData = new vscode5.EventEmitter();
-    this.onDidChangeTreeData = this._onDidChangeTreeData.event;
+// src/chatWebviewProvider.ts
+var ChatWebviewProvider = class {
+  constructor(_extensionUri, wsClient) {
+    this._extensionUri = _extensionUri;
     this.currentUsername = "";
     this.activeChat = null;
-    // Username of active chat
     this.messages = [];
     this.unreadCounts = /* @__PURE__ */ new Map();
     this.wsClient = wsClient;
   }
+  static {
+    this.viewType = "viscord-chat";
+  }
   setCurrentUsername(username) {
     this.currentUsername = username;
+    this._updateWebview();
   }
-  refresh() {
-    this._onDidChangeTreeData.fire();
+  resolveWebviewView(webviewView, context, _token) {
+    this._view = webviewView;
+    webviewView.webview.options = {
+      enableScripts: true,
+      localResourceRoots: [this._extensionUri]
+    };
+    webviewView.webview.html = this._getHtmlForWebview(webviewView.webview);
+    webviewView.webview.onDidReceiveMessage((data) => {
+      switch (data.type) {
+        case "sendMessage":
+          if (this.activeChat && data.message) {
+            this.wsClient.sendChatMessage(this.activeChat, data.message);
+          }
+          break;
+        case "closeChat":
+          this.closeChat();
+          break;
+      }
+    });
   }
   // Open a chat with a specific user
   openChat(username) {
     this.activeChat = username;
+    this.messages = [];
     this.wsClient.getChatHistory(username, (messages) => {
       this.messages = messages;
-      this.refresh();
+      this._updateWebview();
     });
     this.wsClient.markChatAsRead(username);
     this.unreadCounts.delete(username);
-    this.refresh();
+    this._updateWebview();
   }
   closeChat() {
     this.activeChat = null;
     this.messages = [];
-    this.refresh();
+    this._updateWebview();
+  }
+  // Check if currently chatting with a specific user
+  isActiveChatWith(username) {
+    return this.activeChat === username;
   }
   // Handle incoming message
   onMessageReceived(message) {
     if (this.activeChat === message.from_username || this.activeChat === message.to_username) {
       this.messages.push(message);
-      this.refresh();
+      this._updateWebview();
     }
     if (message.from_username !== this.currentUsername && this.activeChat !== message.from_username) {
       const count = this.unreadCounts.get(message.from_username) || 0;
@@ -4479,100 +4515,314 @@ var ChatProvider = class {
   getUnreadCount(username) {
     return this.unreadCounts.get(username) || 0;
   }
-  getTotalUnreadCount() {
-    let total = 0;
-    for (const count of this.unreadCounts.values()) {
-      total += count;
+  _updateWebview() {
+    if (this._view) {
+      this._view.webview.postMessage({
+        type: "update",
+        activeChat: this.activeChat,
+        messages: this.messages,
+        currentUsername: this.currentUsername
+      });
     }
-    return total;
   }
-  getTreeItem(element) {
-    return element;
-  }
-  getChildren(element) {
-    if (!element) {
-      if (!this.activeChat) {
-        const emptyNode = new vscode5.TreeItem("Click a friend to start chatting", vscode5.TreeItemCollapsibleState.None);
-        emptyNode.iconPath = new vscode5.ThemeIcon("comment");
-        return Promise.resolve([emptyNode]);
-      }
-      return Promise.resolve([
-        new ConversationNode(this.activeChat)
-      ]);
-    }
-    if (element instanceof ConversationNode) {
-      const items = this.messages.map((msg) => new MessageNode(msg, this.currentUsername));
-      if (this.activeChat) {
-        items.push(new SendMessageNode(this.activeChat));
-      }
-      return Promise.resolve(items);
-    }
-    return Promise.resolve([]);
-  }
-  // Send a message
-  async sendMessage(to) {
-    const message = await vscode5.window.showInputBox({
-      prompt: `Message to ${to}`,
-      placeHolder: "Type your message...",
-      validateInput: (value) => {
-        if (!value || value.trim().length === 0) {
-          return "Message cannot be empty";
+  _getHtmlForWebview(webview) {
+    return `<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Chat</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
         }
-        if (value.length > 500) {
-          return "Message too long (max 500 characters)";
+        
+        body {
+            font-family: var(--vscode-font-family);
+            font-size: var(--vscode-font-size);
+            color: var(--vscode-foreground);
+            background: var(--vscode-sideBar-background);
+            height: 100vh;
+            display: flex;
+            flex-direction: column;
         }
-        return null;
-      }
-    });
-    if (message) {
-      this.wsClient.sendChatMessage(to, message.trim());
-    }
-  }
-};
-var ConversationNode = class extends vscode5.TreeItem {
-  constructor(username) {
-    super(`Chat with ${username}`, vscode5.TreeItemCollapsibleState.Expanded);
-    this.username = username;
-    this.iconPath = new vscode5.ThemeIcon("comment-discussion");
-    this.contextValue = "conversation";
-  }
-};
-var MessageNode = class extends vscode5.TreeItem {
-  constructor(message, currentUsername) {
-    const isOwnMessage = message.from_username === currentUsername;
-    const prefix = isOwnMessage ? "\u2192 You" : `\u2190 ${message.from_username}`;
-    super(`${prefix}: ${message.message}`, vscode5.TreeItemCollapsibleState.None);
-    this.message = message;
-    const date = new Date(message.created_at);
-    const timeStr = date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-    this.description = timeStr;
-    if (isOwnMessage) {
-      this.iconPath = new vscode5.ThemeIcon("arrow-right", new vscode5.ThemeColor("charts.blue"));
-    } else {
-      this.iconPath = new vscode5.ThemeIcon("arrow-left", new vscode5.ThemeColor("charts.green"));
-    }
-    this.tooltip = `${message.from_username} at ${date.toLocaleString()}
-
-${message.message}`;
-    this.contextValue = "chatMessage";
-  }
-};
-var SendMessageNode = class extends vscode5.TreeItem {
-  constructor(toUsername) {
-    super("Send Message...", vscode5.TreeItemCollapsibleState.None);
-    this.toUsername = toUsername;
-    this.iconPath = new vscode5.ThemeIcon("pencil", new vscode5.ThemeColor("charts.yellow"));
-    this.command = {
-      command: "vscode-viscord.sendChatMessage",
-      title: "Send Message",
-      arguments: [toUsername]
-    };
-    this.contextValue = "sendMessage";
+        
+        .no-chat {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100%;
+            text-align: center;
+            padding: 20px;
+            color: var(--vscode-descriptionForeground);
+        }
+        
+        .no-chat-icon {
+            font-size: 48px;
+            margin-bottom: 16px;
+            opacity: 0.5;
+        }
+        
+        .chat-container {
+            display: flex;
+            flex-direction: column;
+            height: 100%;
+        }
+        
+        .chat-header {
+            padding: 12px 16px;
+            background: var(--vscode-sideBarSectionHeader-background);
+            border-bottom: 1px solid var(--vscode-sideBarSectionHeader-border);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+        
+        .chat-header-title {
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        
+        .close-btn {
+            background: none;
+            border: none;
+            color: var(--vscode-foreground);
+            cursor: pointer;
+            padding: 4px 8px;
+            border-radius: 4px;
+            opacity: 0.7;
+        }
+        
+        .close-btn:hover {
+            background: var(--vscode-toolbar-hoverBackground);
+            opacity: 1;
+        }
+        
+        .messages-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 12px;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        
+        .message {
+            max-width: 85%;
+            padding: 8px 12px;
+            border-radius: 12px;
+            word-wrap: break-word;
+        }
+        
+        .message-sent {
+            align-self: flex-end;
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border-bottom-right-radius: 4px;
+        }
+        
+        .message-received {
+            align-self: flex-start;
+            background: var(--vscode-input-background);
+            border: 1px solid var(--vscode-input-border);
+            border-bottom-left-radius: 4px;
+        }
+        
+        .message-time {
+            font-size: 10px;
+            opacity: 0.6;
+            margin-top: 4px;
+        }
+        
+        .message-sent .message-time {
+            text-align: right;
+        }
+        
+        .input-container {
+            padding: 12px;
+            background: var(--vscode-sideBar-background);
+            border-top: 1px solid var(--vscode-sideBarSectionHeader-border);
+            display: flex;
+            gap: 8px;
+        }
+        
+        .message-input {
+            flex: 1;
+            padding: 8px 12px;
+            border: 1px solid var(--vscode-input-border);
+            background: var(--vscode-input-background);
+            color: var(--vscode-input-foreground);
+            border-radius: 18px;
+            outline: none;
+            font-family: inherit;
+            font-size: inherit;
+        }
+        
+        .message-input:focus {
+            border-color: var(--vscode-focusBorder);
+        }
+        
+        .message-input::placeholder {
+            color: var(--vscode-input-placeholderForeground);
+        }
+        
+        .send-btn {
+            padding: 8px 16px;
+            background: var(--vscode-button-background);
+            color: var(--vscode-button-foreground);
+            border: none;
+            border-radius: 18px;
+            cursor: pointer;
+            font-weight: 500;
+        }
+        
+        .send-btn:hover {
+            background: var(--vscode-button-hoverBackground);
+        }
+        
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+        
+        .empty-messages {
+            text-align: center;
+            color: var(--vscode-descriptionForeground);
+            padding: 40px 20px;
+        }
+    </style>
+</head>
+<body>
+    <div id="app">
+        <div class="no-chat" id="no-chat">
+            <div class="no-chat-icon">\u{1F4AC}</div>
+            <div>Click the chat icon on a friend<br>to start a conversation</div>
+        </div>
+        
+        <div class="chat-container" id="chat-container" style="display: none;">
+            <div class="chat-header">
+                <div class="chat-header-title">
+                    <span>\u{1F4AC}</span>
+                    <span id="chat-with"></span>
+                </div>
+                <button class="close-btn" onclick="closeChat()">\u2715</button>
+            </div>
+            
+            <div class="messages-container" id="messages">
+                <div class="empty-messages">No messages yet. Say hello! \u{1F44B}</div>
+            </div>
+            
+            <div class="input-container">
+                <input 
+                    type="text" 
+                    class="message-input" 
+                    id="message-input" 
+                    placeholder="Type a message..."
+                    maxlength="500"
+                    onkeypress="handleKeyPress(event)"
+                />
+                <button class="send-btn" onclick="sendMessage()">Send</button>
+            </div>
+        </div>
+    </div>
+    
+    <script>
+        const vscode = acquireVsCodeApi();
+        let currentUsername = '';
+        let activeChat = null;
+        
+        // Handle messages from the extension
+        window.addEventListener('message', event => {
+            const data = event.data;
+            
+            if (data.type === 'update') {
+                currentUsername = data.currentUsername;
+                activeChat = data.activeChat;
+                
+                if (activeChat) {
+                    document.getElementById('no-chat').style.display = 'none';
+                    document.getElementById('chat-container').style.display = 'flex';
+                    document.getElementById('chat-with').textContent = activeChat;
+                    renderMessages(data.messages);
+                } else {
+                    document.getElementById('no-chat').style.display = 'flex';
+                    document.getElementById('chat-container').style.display = 'none';
+                }
+            }
+        });
+        
+        function renderMessages(messages) {
+            const container = document.getElementById('messages');
+            
+            if (!messages || messages.length === 0) {
+                container.innerHTML = '<div class="empty-messages">No messages yet. Say hello! \u{1F44B}</div>';
+                return;
+            }
+            
+            container.innerHTML = messages.map(msg => {
+                const isSent = msg.from_username === currentUsername;
+                const time = new Date(msg.created_at).toLocaleTimeString([], { 
+                    hour: '2-digit', 
+                    minute: '2-digit' 
+                });
+                
+                return \`
+                    <div class="message \${isSent ? 'message-sent' : 'message-received'}">
+                        <div class="message-text">\${escapeHtml(msg.message)}</div>
+                        <div class="message-time">\${time}</div>
+                    </div>
+                \`;
+            }).join('');
+            
+            // Scroll to bottom after DOM update
+            requestAnimationFrame(() => {
+                container.scrollTop = container.scrollHeight;
+            });
+        }
+        
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+        
+        function sendMessage() {
+            const input = document.getElementById('message-input');
+            const message = input.value.trim();
+            
+            if (message && activeChat) {
+                vscode.postMessage({
+                    type: 'sendMessage',
+                    message: message
+                });
+                input.value = '';
+                input.focus();
+            }
+        }
+        
+        function handleKeyPress(event) {
+            if (event.key === 'Enter' && !event.shiftKey) {
+                event.preventDefault();
+                sendMessage();
+            }
+        }
+        
+        function closeChat() {
+            vscode.postMessage({ type: 'closeChat' });
+        }
+    </script>
+</body>
+</html>`;
   }
 };
 
 // src/activityTracker.ts
-var vscode6 = __toESM(require("vscode"));
+var vscode5 = __toESM(require("vscode"));
 var ActivityTracker = class {
   // 5 seconds before marking as Idle on blur
   constructor(statusUpdateCallback) {
@@ -4595,8 +4845,8 @@ var ActivityTracker = class {
     this.initialize();
   }
   initialize() {
-    this.isWindowFocused = vscode6.window.state.focused;
-    vscode6.window.onDidChangeWindowState((state) => {
+    this.isWindowFocused = vscode5.window.state.focused;
+    vscode5.window.onDidChangeWindowState((state) => {
       const wasFocused = this.isWindowFocused;
       this.isWindowFocused = state.focused;
       console.log(`Window focus changed: ${wasFocused} -> ${this.isWindowFocused}`);
@@ -4628,25 +4878,25 @@ var ActivityTracker = class {
         }, this.FOCUS_LOST_DELAY);
       }
     });
-    vscode6.window.onDidChangeActiveTextEditor(() => {
+    vscode5.window.onDidChangeActiveTextEditor(() => {
       if (this.isWindowFocused) {
         this.updateActivity();
       }
     });
-    vscode6.workspace.onDidChangeTextDocument((e) => {
+    vscode5.workspace.onDidChangeTextDocument((e) => {
       if (e.document.uri.scheme === "file" && this.isWindowFocused) {
         this.currentActivity = "Coding";
         this.resetIdleTimer();
         this.updateActivity("Coding");
       }
     });
-    vscode6.debug.onDidStartDebugSession(() => {
+    vscode5.debug.onDidStartDebugSession(() => {
       if (this.isWindowFocused) {
         this.currentActivity = "Debugging";
         this.updateActivity("Debugging", true);
       }
     });
-    vscode6.debug.onDidTerminateDebugSession(() => {
+    vscode5.debug.onDidTerminateDebugSession(() => {
       if (this.isWindowFocused) {
         this.currentActivity = "Reading";
         this.updateActivity();
@@ -4665,14 +4915,14 @@ var ActivityTracker = class {
     if (!this.isWindowFocused) {
       return;
     }
-    const config = vscode6.workspace.getConfiguration("vscode-viscord");
+    const config = vscode5.workspace.getConfiguration("vscode-viscord");
     const shareProject = config.get("shareProjectName", true);
     const shareLanguage = config.get("shareLanguage", true);
     const shareActivity = config.get("shareActivity", true);
-    const editor = vscode6.window.activeTextEditor;
+    const editor = vscode5.window.activeTextEditor;
     let newStatus = {};
     if (editor) {
-      const project = shareProject ? vscode6.workspace.name || "No Project" : "Hidden";
+      const project = shareProject ? vscode5.workspace.name || "No Project" : "Hidden";
       const language = shareLanguage ? editor.document.languageId : "Hidden";
       let activity = activityOverride || this.currentActivity;
       if (!activityOverride && this.currentActivity === "Idle") {
@@ -4745,7 +4995,7 @@ var ActivityTracker = class {
 };
 
 // src/githubService.ts
-var vscode7 = __toESM(require("vscode"));
+var vscode6 = __toESM(require("vscode"));
 
 // node_modules/universal-user-agent/index.js
 function getUserAgent() {
@@ -8282,7 +8532,7 @@ var GitHubService = class {
   }
   // 15 minutes
   async authenticate() {
-    this.session = await vscode7.authentication.getSession("github", ["user:email", "read:user"], { createIfNone: true });
+    this.session = await vscode6.authentication.getSession("github", ["user:email", "read:user"], { createIfNone: true });
     this.octokit = new Octokit2({
       auth: this.session.accessToken
     });
@@ -8381,9 +8631,9 @@ async function activate(context) {
   if (!profile) {
     profile = { id: 0, login: "", avatar_url: "", html_url: "" };
   }
-  vscode8.commands.executeCommand("setContext", "vscode-viscord:githubConnected", isGitHubConnected);
-  vscode8.commands.executeCommand("setContext", "vscode-viscord:authenticated", authState !== null);
-  const statusBarItem = vscode8.window.createStatusBarItem(vscode8.StatusBarAlignment.Left, 100);
+  vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", isGitHubConnected);
+  vscode7.commands.executeCommand("setContext", "vscode-viscord:authenticated", authState !== null);
+  const statusBarItem = vscode7.window.createStatusBarItem(vscode7.StatusBarAlignment.Left, 100);
   if (authState) {
     statusBarItem.text = isGitHubConnected ? `$(account) ${profile.login}` : `$(account) ${profile.login} (Guest)`;
     statusBarItem.tooltip = "Click to copy username";
@@ -8393,18 +8643,23 @@ async function activate(context) {
   context.subscriptions.push(statusBarItem);
   const sidebarProvider = new SidebarProvider(context, profile, followers, following, githubService, isGitHubConnected, authState !== null);
   const githubViewProvider = new GitHubViewProvider(sidebarProvider);
-  const chatProvider = new ChatProvider(sidebarProvider.getWsClient());
-  chatProvider.setCurrentUsername(profile.login || "");
+  const chatWebviewProvider = new ChatWebviewProvider(context.extensionUri, sidebarProvider.getWsClient());
+  chatWebviewProvider.setCurrentUsername(profile.login || "");
   sidebarProvider.setOnChatMessage((message) => {
-    chatProvider.onMessageReceived(message);
+    chatWebviewProvider.onMessageReceived(message);
+    if (message.from_username !== (profile.login || "")) {
+      if (!chatWebviewProvider.isActiveChatWith(message.from_username)) {
+        sidebarProvider.incrementUnread(message.from_username);
+      }
+    }
   });
   context.subscriptions.push(
-    vscode8.window.registerTreeDataProvider("viscord-chat", chatProvider)
+    vscode7.window.registerWebviewViewProvider("viscord-chat", chatWebviewProvider)
   );
-  context.subscriptions.push(vscode8.commands.registerCommand("vscode-viscord.continueAsGuest", async () => {
+  context.subscriptions.push(vscode7.commands.registerCommand("vscode-viscord.continueAsGuest", async () => {
     let username = context.globalState.get("guestUsername") || "";
     if (!username) {
-      const input = await vscode8.window.showInputBox({
+      const input = await vscode7.window.showInputBox({
         prompt: "Enter a username to continue as guest",
         placeHolder: "GuestUser123",
         validateInput: (value) => {
@@ -8418,16 +8673,16 @@ async function activate(context) {
       await context.globalState.update("guestUsername", username);
     }
     await context.globalState.update("authState", "guest");
-    vscode8.commands.executeCommand("setContext", "vscode-viscord:authenticated", true);
-    vscode8.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
+    vscode7.commands.executeCommand("setContext", "vscode-viscord:authenticated", true);
+    vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
     const guestProfile = createGuestProfile(username);
     statusBarItem.text = `$(account) ${username} (Guest)`;
     statusBarItem.show();
     sidebarProvider.setAuthenticated(true);
     sidebarProvider.reconnectAsGuest(username);
-    vscode8.window.showInformationMessage(`Connected as guest: ${username}`);
+    vscode7.window.showInformationMessage(`Connected as guest: ${username}`);
   }));
-  context.subscriptions.push(vscode8.commands.registerCommand("vscode-viscord.connectGitHub", async () => {
+  context.subscriptions.push(vscode7.commands.registerCommand("vscode-viscord.connectGitHub", async () => {
     try {
       const session = await githubService.authenticate();
       const newProfile = await githubService.getProfile();
@@ -8435,36 +8690,36 @@ async function activate(context) {
       const newFollowing = await githubService.getFollowing();
       const guestUsername = context.globalState.get("guestUsername");
       await context.globalState.update("authState", "github");
-      vscode8.commands.executeCommand("setContext", "vscode-viscord:authenticated", true);
-      vscode8.commands.executeCommand("setContext", "vscode-viscord:githubConnected", true);
+      vscode7.commands.executeCommand("setContext", "vscode-viscord:authenticated", true);
+      vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", true);
       statusBarItem.text = `$(account) ${newProfile.login}`;
       statusBarItem.show();
       sidebarProvider.setAuthenticated(true);
       sidebarProvider.connectGitHub(newProfile, newFollowers, newFollowing, guestUsername);
       githubViewProvider.refresh();
-      vscode8.window.showInformationMessage(`Connected to GitHub as ${newProfile.login}`);
+      vscode7.window.showInformationMessage(`Connected to GitHub as ${newProfile.login}`);
     } catch (error) {
-      vscode8.window.showErrorMessage("Failed to connect to GitHub");
+      vscode7.window.showErrorMessage("Failed to connect to GitHub");
       console.error("GitHub connection failed:", error);
     }
   }));
-  const friendsTreeView = vscode8.window.createTreeView("viscord-friends", {
+  const friendsTreeView = vscode7.window.createTreeView("viscord-friends", {
     treeDataProvider: sidebarProvider,
     showCollapseAll: true
   });
   context.subscriptions.push(friendsTreeView);
-  const githubTreeView = vscode8.window.createTreeView("viscord-github", {
+  const githubTreeView = vscode7.window.createTreeView("viscord-github", {
     treeDataProvider: githubViewProvider,
     showCollapseAll: true
   });
   context.subscriptions.push(githubTreeView);
-  const statusChangeEmitter = new vscode8.EventEmitter();
+  const statusChangeEmitter = new vscode7.EventEmitter();
   const statusProvider = {
     onDidChangeTreeData: statusChangeEmitter.event,
     getTreeItem: (element) => element,
     getChildren: () => {
       const status = sidebarProvider.connectionStatus;
-      const statusNode = new class extends vscode8.TreeItem {
+      const statusNode = new class extends vscode7.TreeItem {
         constructor() {
           let label;
           let icon;
@@ -8472,27 +8727,27 @@ async function activate(context) {
           switch (status) {
             case "connected":
               label = "Connected";
-              icon = new vscode8.ThemeIcon("check", new vscode8.ThemeColor("charts.green"));
+              icon = new vscode7.ThemeIcon("check", new vscode7.ThemeColor("charts.green"));
               tooltip = "Connected to server";
               break;
             case "connecting":
               label = "Connecting...";
-              icon = new vscode8.ThemeIcon("sync~spin", new vscode8.ThemeColor("charts.yellow"));
+              icon = new vscode7.ThemeIcon("sync~spin", new vscode7.ThemeColor("charts.yellow"));
               tooltip = "Connecting to server...";
               break;
             case "error":
               label = "Connection Error";
-              icon = new vscode8.ThemeIcon("error", new vscode8.ThemeColor("charts.red"));
+              icon = new vscode7.ThemeIcon("error", new vscode7.ThemeColor("charts.red"));
               tooltip = "Failed to connect. Click refresh to retry.";
               break;
             case "disconnected":
             default:
               label = "Disconnected";
-              icon = new vscode8.ThemeIcon("circle-outline", new vscode8.ThemeColor("charts.gray"));
+              icon = new vscode7.ThemeIcon("circle-outline", new vscode7.ThemeColor("charts.gray"));
               tooltip = "Not connected to server";
               break;
           }
-          super(label, vscode8.TreeItemCollapsibleState.None);
+          super(label, vscode7.TreeItemCollapsibleState.None);
           this.iconPath = icon;
           this.tooltip = tooltip;
           this.contextValue = "statusIndicator";
@@ -8501,7 +8756,7 @@ async function activate(context) {
       return Promise.resolve([statusNode]);
     }
   };
-  const statusTreeView = vscode8.window.createTreeView("viscord-status", {
+  const statusTreeView = vscode7.window.createTreeView("viscord-status", {
     treeDataProvider: statusProvider
   });
   context.subscriptions.push(statusTreeView);
@@ -8509,8 +8764,8 @@ async function activate(context) {
   sidebarProvider.onConnectionStatusChanged(() => {
     statusChangeEmitter.fire();
   });
-  vscode8.commands.registerCommand("vscode-viscord.resetExtension", async () => {
-    const confirm = await vscode8.window.showWarningMessage(
+  vscode7.commands.registerCommand("vscode-viscord.resetExtension", async () => {
+    const confirm = await vscode7.window.showWarningMessage(
       "This will sign you out of GitHub, clear all local data, and return the extension to its initial state. Continue?",
       { modal: true },
       "Yes, Reset Everything"
@@ -8520,27 +8775,27 @@ async function activate(context) {
       await context.globalState.update("authState", void 0);
       await context.globalState.update("guestUsername", void 0);
       await context.globalState.update("closeFriends", void 0);
-      vscode8.commands.executeCommand("setContext", "vscode-viscord:authenticated", false);
-      vscode8.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
+      vscode7.commands.executeCommand("setContext", "vscode-viscord:authenticated", false);
+      vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
       sidebarProvider.disconnect();
       sidebarProvider.setAuthenticated(false);
       statusBarItem.hide();
-      vscode8.window.showInformationMessage(
+      vscode7.window.showInformationMessage(
         "Extension reset complete. Please reload the window.",
         "Reload Window"
       ).then((selection) => {
         if (selection === "Reload Window") {
-          vscode8.commands.executeCommand("workbench.action.reloadWindow");
+          vscode7.commands.executeCommand("workbench.action.reloadWindow");
         }
       });
     }
   });
-  const config = vscode8.workspace.getConfiguration("vscode-viscord");
+  const config = vscode7.workspace.getConfiguration("vscode-viscord");
   const explorerProvider = new ExplorerPresenceProvider();
   if (config.get("showInExplorer", true)) {
-    vscode8.window.registerTreeDataProvider("viscord-explorer", explorerProvider);
+    vscode7.window.registerTreeDataProvider("viscord-explorer", explorerProvider);
   }
-  const onlineFriendsStatusBar = vscode8.window.createStatusBarItem(vscode8.StatusBarAlignment.Right, 99);
+  const onlineFriendsStatusBar = vscode7.window.createStatusBarItem(vscode7.StatusBarAlignment.Right, 99);
   onlineFriendsStatusBar.command = "workbench.view.extension.viscord-sidebar";
   onlineFriendsStatusBar.tooltip = "Click to view viscord";
   context.subscriptions.push(onlineFriendsStatusBar);
@@ -8578,9 +8833,9 @@ async function activate(context) {
     }
   });
   context.subscriptions.push({ dispose: () => activityTracker.dispose() });
-  const configWatcher = vscode8.workspace.onDidChangeConfiguration((e) => {
+  const configWatcher = vscode7.workspace.onDidChangeConfiguration((e) => {
     if (e.affectsConfiguration("vscode-viscord")) {
-      const config2 = vscode8.workspace.getConfiguration("vscode-viscord");
+      const config2 = vscode7.workspace.getConfiguration("vscode-viscord");
       if (e.affectsConfiguration("vscode-viscord.visibilityMode")) {
         const visibilityMode = config2.get("visibilityMode", "everyone");
         sidebarProvider.sendMessage({
@@ -8598,51 +8853,51 @@ async function activate(context) {
     }
   });
   context.subscriptions.push(configWatcher);
-  vscode8.commands.registerCommand("vscode-viscord.refresh", () => {
+  vscode7.commands.registerCommand("vscode-viscord.refresh", () => {
     sidebarProvider.reconnect();
     sidebarProvider.refresh();
     githubViewProvider.refresh();
   });
-  vscode8.commands.registerCommand("vscode-viscord.pinCloseFriend", async (item) => {
+  vscode7.commands.registerCommand("vscode-viscord.pinCloseFriend", async (item) => {
     if (item && item.user) {
       sidebarProvider.addCloseFriend(item.user.username);
-      vscode8.window.showInformationMessage(`Pinned ${item.user.username} to Close Friends`);
+      vscode7.window.showInformationMessage(`Pinned ${item.user.username} to Close Friends`);
     }
   });
-  vscode8.commands.registerCommand("vscode-viscord.unpinCloseFriend", (item) => {
+  vscode7.commands.registerCommand("vscode-viscord.unpinCloseFriend", (item) => {
     if (item && item.user) {
       sidebarProvider.removeCloseFriend(item.user.username);
-      vscode8.window.showInformationMessage(`Unpinned ${item.user.username} from Close Friends`);
+      vscode7.window.showInformationMessage(`Unpinned ${item.user.username} from Close Friends`);
     }
   });
-  vscode8.commands.registerCommand("vscode-viscord.copyUsername", () => {
+  vscode7.commands.registerCommand("vscode-viscord.copyUsername", () => {
     const currentProfile = sidebarProvider.getProfile();
     if (currentProfile && currentProfile.login) {
-      vscode8.env.clipboard.writeText(currentProfile.login);
-      vscode8.window.showInformationMessage(`Username copied: ${currentProfile.login}`);
+      vscode7.env.clipboard.writeText(currentProfile.login);
+      vscode7.window.showInformationMessage(`Username copied: ${currentProfile.login}`);
     }
   });
   const signOutOfGitHub = async (message) => {
     await githubService.signOut();
     await context.globalState.update("authState", "guest");
-    vscode8.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
+    vscode7.commands.executeCommand("setContext", "vscode-viscord:githubConnected", false);
     const guestUsername = context.globalState.get("guestUsername") || "Guest";
     statusBarItem.text = `$(account) ${guestUsername} (Guest)`;
     sidebarProvider.disconnectGitHub(guestUsername);
     githubViewProvider.refresh();
-    vscode8.window.showInformationMessage(message);
+    vscode7.window.showInformationMessage(message);
   };
-  vscode8.commands.registerCommand("vscode-viscord.logout", async () => {
+  vscode7.commands.registerCommand("vscode-viscord.logout", async () => {
     await signOutOfGitHub("Logged out of GitHub. Manual connections preserved.");
   });
-  vscode8.commands.registerCommand("vscode-viscord.openSettings", () => {
-    vscode8.commands.executeCommand("workbench.action.openSettings", "vscode-viscord");
+  vscode7.commands.registerCommand("vscode-viscord.openSettings", () => {
+    vscode7.commands.executeCommand("workbench.action.openSettings", "vscode-viscord");
   });
-  vscode8.commands.registerCommand("vscode-viscord.createInvite", () => {
+  vscode7.commands.registerCommand("vscode-viscord.createInvite", () => {
     sidebarProvider.sendMessage({ type: "createInvite" });
   });
-  vscode8.commands.registerCommand("vscode-viscord.acceptInvite", async () => {
-    const code = await vscode8.window.showInputBox({
+  vscode7.commands.registerCommand("vscode-viscord.acceptInvite", async () => {
+    const code = await vscode7.window.showInputBox({
       prompt: "Enter invite code",
       placeHolder: "ABC123",
       validateInput: (value) => {
@@ -8654,12 +8909,12 @@ async function activate(context) {
       sidebarProvider.sendMessage({ type: "acceptInvite", code: code.toUpperCase() });
     }
   });
-  vscode8.commands.registerCommand("vscode-viscord.removeConnection", async (item) => {
+  vscode7.commands.registerCommand("vscode-viscord.removeConnection", async (item) => {
     if (!item || !item.user) {
-      vscode8.window.showErrorMessage("No user selected");
+      vscode7.window.showErrorMessage("No user selected");
       return;
     }
-    const confirm = await vscode8.window.showWarningMessage(
+    const confirm = await vscode7.window.showWarningMessage(
       `Remove connection with ${item.user.username}?`,
       "Yes, Remove",
       "Cancel"
@@ -8669,11 +8924,11 @@ async function activate(context) {
         type: "removeConnection",
         username: item.user.username
       });
-      vscode8.window.showInformationMessage(`Removed connection with ${item.user.username}`);
+      vscode7.window.showInformationMessage(`Removed connection with ${item.user.username}`);
     }
   });
-  vscode8.commands.registerCommand("vscode-viscord.reset", async () => {
-    const confirm = await vscode8.window.showWarningMessage(
+  vscode7.commands.registerCommand("vscode-viscord.reset", async () => {
+    const confirm = await vscode7.window.showWarningMessage(
       "This will clear all local data. Continue?",
       "Yes, Reset",
       "Cancel"
@@ -8682,11 +8937,11 @@ async function activate(context) {
       await context.globalState.update("authState", void 0);
       await context.globalState.update("guestUsername", void 0);
       await context.globalState.update("closeFriends", void 0);
-      vscode8.window.showInformationMessage("Data cleared. Reload window.");
+      vscode7.window.showInformationMessage("Data cleared. Reload window.");
     }
   });
-  vscode8.commands.registerCommand("vscode-viscord.clearCache", async () => {
-    const confirm = await vscode8.window.showInformationMessage(
+  vscode7.commands.registerCommand("vscode-viscord.clearCache", async () => {
+    const confirm = await vscode7.window.showInformationMessage(
       "Clear cached data and refresh? Your authentication will be preserved.",
       "Clear Cache",
       "Cancel"
@@ -8696,11 +8951,11 @@ async function activate(context) {
       sidebarProvider.reconnect();
       sidebarProvider.refresh();
       githubViewProvider.refresh();
-      vscode8.window.showInformationMessage("Cache cleared and refreshed!");
+      vscode7.window.showInformationMessage("Cache cleared and refreshed!");
     }
   });
-  vscode8.commands.registerCommand("vscode-viscord.signOutGitHub", async () => {
-    const confirm = await vscode8.window.showWarningMessage(
+  vscode7.commands.registerCommand("vscode-viscord.signOutGitHub", async () => {
+    const confirm = await vscode7.window.showWarningMessage(
       "Sign out of GitHub? You will switch to guest mode.",
       "Sign Out",
       "Cancel"
@@ -8709,20 +8964,25 @@ async function activate(context) {
       await signOutOfGitHub("Signed out of GitHub. Your manual connections are preserved.");
     }
   });
-  vscode8.commands.registerCommand("vscode-viscord.openChat", (item) => {
+  vscode7.commands.registerCommand("vscode-viscord.openChat", (item) => {
+    let username = null;
     if (item && item.user && item.user.username) {
-      chatProvider.openChat(item.user.username);
+      username = item.user.username;
     } else if (typeof item === "string") {
-      chatProvider.openChat(item);
+      username = item;
+    }
+    if (username) {
+      chatWebviewProvider.openChat(username);
+      sidebarProvider.clearUnread(username);
     }
   });
-  vscode8.commands.registerCommand("vscode-viscord.sendChatMessage", async (toUsername) => {
+  vscode7.commands.registerCommand("vscode-viscord.sendChatMessage", async (toUsername) => {
     if (toUsername) {
-      await chatProvider.sendMessage(toUsername);
+      chatWebviewProvider.openChat(toUsername);
     }
   });
-  vscode8.commands.registerCommand("vscode-viscord.closeChat", () => {
-    chatProvider.closeChat();
+  vscode7.commands.registerCommand("vscode-viscord.closeChat", () => {
+    chatWebviewProvider.closeChat();
   });
 }
 function deactivate() {

@@ -37,6 +37,12 @@ export class RateLimiter {
         return this.checkLimit(this.messageAttempts, userId, 60, 'Message');
     }
 
+    // Chat rate limit: max 30 chat messages per minute per user (sliding window)
+    // More restrictive than general messages to prevent spam
+    checkChatLimit(userId: string): boolean {
+        return this.checkLimit(this.messageAttempts, `chat:${userId}`, 30, 'Chat');
+    }
+
     // Cleanup old entries (run periodically)
     cleanup(): void {
         const now = Date.now();

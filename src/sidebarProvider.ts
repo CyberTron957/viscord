@@ -25,6 +25,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     private isAuthenticated: boolean;
     private _connectionStatus: ConnectionStatus = 'disconnected';
     private onChatMessage: ((message: ChatMessage) => void) | null = null;
+    private unreadCounts: Map<string, number> = new Map();  // username -> unread count
 
     constructor(
         context: vscode.ExtensionContext,
@@ -85,6 +86,24 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
 
     setOnChatMessage(callback: (message: ChatMessage) => void) {
         this.onChatMessage = callback;
+    }
+
+    // Unread message tracking
+    incrementUnread(username: string) {
+        const current = this.unreadCounts.get(username) || 0;
+        this.unreadCounts.set(username, current + 1);
+        this.refresh();
+    }
+
+    clearUnread(username: string) {
+        if (this.unreadCounts.has(username)) {
+            this.unreadCounts.delete(username);
+            this.refresh();
+        }
+    }
+
+    getUnreadCount(username: string): number {
+        return this.unreadCounts.get(username) || 0;
     }
 
     reconnect() {
@@ -182,7 +201,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
                 break;
         }
 
-        return users.map(u => new UserNode(u, vscode.TreeItemCollapsibleState.None, this.isManualConnection(u.username)));
+        return users.map(u => new UserNode(u, vscode.TreeItemCollapsibleState.None, this.isManualConnection(u.username), this.getUnreadCount(u.username)));
     }
 
     private getFollowingUsers(): UserStatus[] {
@@ -357,7 +376,7 @@ export class GitHubViewProvider implements vscode.TreeDataProvider<TreeNode> {
                 break;
         }
 
-        return users.map(u => new UserNode(u, vscode.TreeItemCollapsibleState.None));
+        return users.map(u => new UserNode(u, vscode.TreeItemCollapsibleState.None, false, this.sidebarProvider.getUnreadCount(u.username)));
     }
 
     private getFollowingUsers(): UserStatus[] {
@@ -389,11 +408,18 @@ class UserNode extends vscode.TreeItem {
     constructor(
         public user: UserStatus,
         public readonly collapsibleState: vscode.TreeItemCollapsibleState,
-        isManualConnection: boolean = false
+        isManualConnection: boolean = false,
+        unreadCount: number = 0
     ) {
         super(user.username, collapsibleState);
 
-        this.description = buildUserDescription(user);
+        // Show unread indicator if there are unread messages
+        if (unreadCount > 0) {
+            this.description = `🔵 ${buildUserDescription(user)}`;
+        } else {
+            this.description = buildUserDescription(user);
+        }
+
         this.tooltip = buildUserTooltip(user);
         this.iconPath = getUserStatusIcon(user.status);
 
