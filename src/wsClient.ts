@@ -261,6 +261,11 @@ export class WsClient {
                             this.pendingChatHistoryCallback(message.messages);
                             this.pendingChatHistoryCallback = null;
                         }
+                    } else if (message.type === 'error') {
+                        // Server error (e.g., permission denied, rate limit)
+                        vscode.window.showErrorMessage(
+                            `Viscord: ${message.message || 'An error occurred'}`
+                        );
                     }
                 } catch (e) {
                     console.error('Error parsing message', e);

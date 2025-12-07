@@ -3942,6 +3942,10 @@ var WsClient = class {
               this.pendingChatHistoryCallback(message.messages);
               this.pendingChatHistoryCallback = null;
             }
+          } else if (message.type === "error") {
+            vscode.window.showErrorMessage(
+              `Viscord: ${message.message || "An error occurred"}`
+            );
           }
         } catch (e) {
           console.error("Error parsing message", e);
