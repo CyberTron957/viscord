@@ -68,6 +68,13 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
         this.refresh();
     }
 
+    private updateNoFriendsContext() {
+        // Check if user has any friends visible
+        const hasAnyFriends = this.allUsers.length > 0 &&
+            this.allUsers.some(u => u.username !== this.profile.login);
+        vscode.commands.executeCommand('setContext', 'vscode-viscord:noFriends', !hasAnyFriends);
+    }
+
     get connectionStatus(): ConnectionStatus {
         return this._connectionStatus;
     }
@@ -96,6 +103,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     }
 
     refresh(): void {
+        this.updateNoFriendsContext();
         this._onDidChangeTreeData.fire();
     }
 

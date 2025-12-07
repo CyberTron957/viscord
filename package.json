@@ -216,6 +216,11 @@
         "when": "!vscode-viscord:authenticated"
       },
       {
+        "view": "viscord-friends",
+        "contents": "No friends online yet!\n\nGet started by:\n• Creating an invite link to connect with friends\n• Connecting your GitHub account to see your network\n\n[Create Invite Link](command:vscode-viscord.createInvite)\n[Connect GitHub](command:vscode-viscord.connectGitHub)",
+        "when": "vscode-viscord:authenticated && vscode-viscord:noFriends"
+      },
+      {
         "view": "viscord-github",
         "contents": "Connect to GitHub to see your followers and following online.\n[Connect GitHub](command:vscode-viscord.connectGitHub)",
         "when": "!vscode-viscord:githubConnected"

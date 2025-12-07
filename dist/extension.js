@@ -4088,6 +4088,10 @@ var SidebarProvider = class {
     this.isAuthenticated = value;
     this.refresh();
   }
+  updateNoFriendsContext() {
+    const hasAnyFriends = this.allUsers.length > 0 && this.allUsers.some((u) => u.username !== this.profile.login);
+    vscode3.commands.executeCommand("setContext", "vscode-viscord:noFriends", !hasAnyFriends);
+  }
   get connectionStatus() {
     return this._connectionStatus;
   }
@@ -4112,6 +4116,7 @@ var SidebarProvider = class {
     }
   }
   refresh() {
+    this.updateNoFriendsContext();
     this._onDidChangeTreeData.fire();
   }
   getTreeItem(element) {
