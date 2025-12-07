@@ -10,12 +10,22 @@ export interface UserStatus {
     lastSeen?: number;
 }
 
+export interface ChatMessage {
+    id: number;
+    from_username: string;
+    to_username: string;
+    message: string;
+    created_at: number;
+    read_at: number | null;
+}
+
 export type ConnectionStatus = 'disconnected' | 'connecting' | 'connected' | 'error';
 
 export class WsClient {
     private ws: WebSocket | null = null;
     private onUserListUpdate: (users: UserStatus[]) => void;
     private onConnectionStatusChange: (status: ConnectionStatus) => void;
+    private onChatMessageReceived: (message: ChatMessage) => void;
     private username: string = '';
     private token: string | undefined;
     private reconnectAttempts = 0;
@@ -30,13 +40,17 @@ export class WsClient {
     private resumeTokenExpiry: number = 0;
     // Client-side state for delta updates
     private users: Map<string, UserStatus> = new Map();
+    // Chat history callbacks for async loading
+    private pendingChatHistoryCallback: ((messages: ChatMessage[]) => void) | null = null;
 
     constructor(
         onUserListUpdate: (users: UserStatus[]) => void,
-        onConnectionStatusChange?: (status: ConnectionStatus) => void
+        onConnectionStatusChange?: (status: ConnectionStatus) => void,
+        onChatMessageReceived?: (message: ChatMessage) => void
     ) {
         this.onUserListUpdate = onUserListUpdate;
         this.onConnectionStatusChange = onConnectionStatusChange || (() => { });
+        this.onChatMessageReceived = onChatMessageReceived || (() => { });
         this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
     }
 
@@ -234,6 +248,29 @@ export class WsClient {
                             );
                         }
                     }
+                    // --- Chat Messages ---
+                    else if (message.type === 'chatMessageReceived') {
+                        // Incoming message from another user
+                        this.onChatMessageReceived(message.message);
+                        // Show notification
+                        vscode.window.showInformationMessage(
+                            `💬 ${message.message.from_username}: ${message.message.message.substring(0, 50)}${message.message.message.length > 50 ? '...' : ''}`,
+                            'Open Chat'
+                        ).then((selection: string | undefined) => {
+                            if (selection === 'Open Chat') {
+                                vscode.commands.executeCommand('vscode-viscord.openChat', message.message.from_username);
+                            }
+                        });
+                    } else if (message.type === 'chatMessageSent') {
+                        // Confirmation that our message was sent
+                        this.onChatMessageReceived(message.message);
+                    } else if (message.type === 'chatHistory') {
+                        // History loaded - call pending callback
+                        if (this.pendingChatHistoryCallback) {
+                            this.pendingChatHistoryCallback(message.messages);
+                            this.pendingChatHistoryCallback = null;
+                        }
+                    }
                 } catch (e) {
                     console.error('Error parsing message', e);
                 }
@@ -313,5 +350,31 @@ export class WsClient {
         }
 
         this.setConnectionStatus('disconnected');
+    }
+
+    // --- Chat Methods ---
+
+    sendChatMessage(to: string, message: string) {
+        this.send({
+            type: 'sendChatMessage',
+            to,
+            message
+        });
+    }
+
+    getChatHistory(withUser: string, callback: (messages: ChatMessage[]) => void) {
+        this.pendingChatHistoryCallback = callback;
+        this.send({
+            type: 'getChatHistory',
+            with: withUser,
+            limit: 50
+        });
+    }
+
+    markChatAsRead(fromUser: string) {
+        this.send({
+            type: 'markChatRead',
+            from: fromUser
+        });
     }
 }

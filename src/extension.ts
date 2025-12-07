@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import { SidebarProvider, GitHubViewProvider } from './sidebarProvider';
 import { ExplorerPresenceProvider } from './explorerPresenceProvider';
+import { ChatProvider } from './chatProvider';
 import { ActivityTracker } from './activityTracker';
 import { GitHubService } from './githubService';
 import { createGuestProfile, GUEST_AVATAR_URL } from './utils';
@@ -73,6 +74,20 @@ export async function activate(context: vscode.ExtensionContext) {
     // Initialize Providers
     const sidebarProvider = new SidebarProvider(context, profile, followers, following, githubService, isGitHubConnected, authState !== null);
     const githubViewProvider = new GitHubViewProvider(sidebarProvider);
+
+    // Initialize Chat Provider
+    const chatProvider = new ChatProvider(sidebarProvider.getWsClient());
+    chatProvider.setCurrentUsername(profile.login || '');
+
+    // Connect chat message handler
+    sidebarProvider.setOnChatMessage((message) => {
+        chatProvider.onMessageReceived(message);
+    });
+
+    // Register Chat View
+    context.subscriptions.push(
+        vscode.window.registerTreeDataProvider('viscord-chat', chatProvider)
+    );
 
     // *** CRITICAL: Register welcome view commands IMMEDIATELY after providers are initialized ***
     // This ensures the commands are available when the welcome view buttons render in packed extensions
@@ -488,6 +503,30 @@ export async function activate(context: vscode.ExtensionContext) {
         if (confirm === 'Sign Out') {
             await signOutOfGitHub('Signed out of GitHub. Your manual connections are preserved.');
         }
+    });
+
+    // --- Chat Commands ---
+
+    // Open chat with a specific user
+    vscode.commands.registerCommand('vscode-viscord.openChat', (item: any) => {
+        if (item && item.user && item.user.username) {
+            chatProvider.openChat(item.user.username);
+        } else if (typeof item === 'string') {
+            // Called with username string directly
+            chatProvider.openChat(item);
+        }
+    });
+
+    // Send a chat message
+    vscode.commands.registerCommand('vscode-viscord.sendChatMessage', async (toUsername?: string) => {
+        if (toUsername) {
+            await chatProvider.sendMessage(toUsername);
+        }
+    });
+
+    // Close active chat
+    vscode.commands.registerCommand('vscode-viscord.closeChat', () => {
+        chatProvider.closeChat();
     });
 }
 

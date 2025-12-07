@@ -1,5 +1,5 @@
 import * as vscode from 'vscode';
-import { WsClient, UserStatus, ConnectionStatus } from './wsClient';
+import { WsClient, UserStatus, ConnectionStatus, ChatMessage } from './wsClient';
 import { GitHubService, GitHubUser } from './githubService';
 import { createGuestProfile, buildUserDescription, buildUserTooltip, getUserStatusIcon, formatLastSeen } from './utils';
 
@@ -24,6 +24,7 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
     public isGitHubConnected: boolean;
     private isAuthenticated: boolean;
     private _connectionStatus: ConnectionStatus = 'disconnected';
+    private onChatMessage: ((message: ChatMessage) => void) | null = null;
 
     constructor(
         context: vscode.ExtensionContext,
@@ -53,6 +54,12 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
                 this._connectionStatus = status;
                 this._onConnectionStatusChanged.fire(status);
                 this.refresh();
+            },
+            (message) => {
+                // Forward chat messages to registered callback
+                if (this.onChatMessage) {
+                    this.onChatMessage(message);
+                }
             }
         );
 
@@ -70,6 +77,14 @@ export class SidebarProvider implements vscode.TreeDataProvider<TreeNode> {
 
     get connectionStatus(): ConnectionStatus {
         return this._connectionStatus;
+    }
+
+    getWsClient(): WsClient {
+        return this.wsClient;
+    }
+
+    setOnChatMessage(callback: (message: ChatMessage) => void) {
+        this.onChatMessage = callback;
     }
 
     reconnect() {

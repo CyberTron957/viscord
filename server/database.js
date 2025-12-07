@@ -80,6 +80,19 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS idx_invite_codes_creator ON invite_codes(creator_username);
   CREATE INDEX IF NOT EXISTS idx_manual_connections ON manual_connections(user1_username);
   CREATE INDEX IF NOT EXISTS idx_username_aliases_guest ON username_aliases(guest_username);
+
+  -- Chat messages for 1-on-1 DMs
+  CREATE TABLE IF NOT EXISTS chat_messages (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    from_username TEXT NOT NULL,
+    to_username TEXT NOT NULL,
+    message TEXT NOT NULL,
+    created_at INTEGER NOT NULL,
+    read_at INTEGER
+  );
+
+  CREATE INDEX IF NOT EXISTS idx_chat_messages_conversation ON chat_messages(from_username, to_username, created_at);
+  CREATE INDEX IF NOT EXISTS idx_chat_messages_unread ON chat_messages(to_username, read_at);
 `);
 class DatabaseService {
     // User operations
@@ -304,6 +317,69 @@ class DatabaseService {
             return githubUsername;
         }
         return username;
+    }
+    // --- Chat Messages ---
+    // Save a new chat message
+    saveMessage(fromUsername, toUsername, message) {
+        const stmt = db.prepare(`
+            INSERT INTO chat_messages (from_username, to_username, message, created_at)
+            VALUES (?, ?, ?, ?)
+        `);
+        const now = Date.now();
+        const result = stmt.run(fromUsername, toUsername, message, now);
+        return {
+            id: result.lastInsertRowid,
+            from_username: fromUsername,
+            to_username: toUsername,
+            message,
+            created_at: now,
+            read_at: null
+        };
+    }
+    // Get conversation history between two users (last N messages)
+    getConversationHistory(user1, user2, limit = 50) {
+        const stmt = db.prepare(`
+            SELECT * FROM chat_messages
+            WHERE (from_username = ? AND to_username = ?)
+               OR (from_username = ? AND to_username = ?)
+            ORDER BY created_at DESC
+            LIMIT ?
+        `);
+        const messages = stmt.all(user1, user2, user2, user1, limit);
+        // Return in chronological order
+        return messages.reverse();
+    }
+    // Get unread message count from a specific user
+    getUnreadCount(fromUsername, toUsername) {
+        const stmt = db.prepare(`
+            SELECT COUNT(*) as count FROM chat_messages
+            WHERE from_username = ? AND to_username = ? AND read_at IS NULL
+        `);
+        const result = stmt.get(fromUsername, toUsername);
+        return result.count;
+    }
+    // Get all unread counts for a user (sender -> count)
+    getUnreadCounts(username) {
+        const stmt = db.prepare(`
+            SELECT from_username, COUNT(*) as count FROM chat_messages
+            WHERE to_username = ? AND read_at IS NULL
+            GROUP BY from_username
+        `);
+        const results = stmt.all(username);
+        const counts = new Map();
+        for (const row of results) {
+            counts.set(row.from_username, row.count);
+        }
+        return counts;
+    }
+    // Mark messages as read
+    markMessagesAsRead(fromUsername, toUsername) {
+        const stmt = db.prepare(`
+            UPDATE chat_messages
+            SET read_at = ?
+            WHERE from_username = ? AND to_username = ? AND read_at IS NULL
+        `);
+        stmt.run(Date.now(), fromUsername, toUsername);
     }
     // --- Backup System ---
     // Create a backup of the database

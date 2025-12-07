@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Octokit } from '@octokit/rest';
-import { dbService, UserPreferences, UserRecord } from './database';
+import { dbService, UserPreferences, UserRecord, ChatMessage } from './database';
 import { rateLimiter } from './rateLimiter';
 import { redisService, SessionData } from './redisService';
 import http from 'http';
@@ -440,6 +440,62 @@ wss.on('connection', (ws, req) => {
 
                     // Broadcast update to refresh user lists
                     scheduleBroadcast();
+                }
+            }
+            // --- Chat Messages ---
+            else if (data.type === 'sendChatMessage') {
+                if (clientData && data.to && data.message) {
+                    const fromUsername = dbService.resolveUsername(clientData.username);
+                    const toUsername = dbService.resolveUsername(data.to);
+
+                    // Save message to database
+                    const savedMessage = dbService.saveMessage(fromUsername, toUsername, data.message);
+                    console.log(`Chat: ${fromUsername} -> ${toUsername}: ${data.message.substring(0, 50)}...`);
+
+                    // Send confirmation back to sender
+                    ws.send(JSON.stringify({
+                        type: 'chatMessageSent',
+                        message: savedMessage
+                    }));
+
+                    // Route to recipient if online
+                    for (const [recipientWs, recipientData] of clients.entries()) {
+                        const resolvedRecipient = dbService.resolveUsername(recipientData.username);
+                        if (resolvedRecipient === toUsername && recipientWs.readyState === WebSocket.OPEN) {
+                            recipientWs.send(JSON.stringify({
+                                type: 'chatMessageReceived',
+                                message: savedMessage
+                            }));
+                        }
+                    }
+                }
+            } else if (data.type === 'getChatHistory') {
+                if (clientData && data.with) {
+                    const myUsername = dbService.resolveUsername(clientData.username);
+                    const theirUsername = dbService.resolveUsername(data.with);
+
+                    const messages = dbService.getConversationHistory(myUsername, theirUsername, data.limit || 50);
+
+                    ws.send(JSON.stringify({
+                        type: 'chatHistory',
+                        with: data.with,
+                        messages
+                    }));
+
+                    // Mark messages from them as read
+                    dbService.markMessagesAsRead(theirUsername, myUsername);
+                }
+            } else if (data.type === 'markChatRead') {
+                if (clientData && data.from) {
+                    const myUsername = dbService.resolveUsername(clientData.username);
+                    const fromUsername = dbService.resolveUsername(data.from);
+
+                    dbService.markMessagesAsRead(fromUsername, myUsername);
+
+                    ws.send(JSON.stringify({
+                        type: 'chatMarkedRead',
+                        from: data.from
+                    }));
                 }
             }
         } catch (e) {

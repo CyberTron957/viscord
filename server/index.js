@@ -385,6 +385,56 @@ wss.on('connection', (ws, req) => {
                     scheduleBroadcast();
                 }
             }
+            // --- Chat Messages ---
+            else if (data.type === 'sendChatMessage') {
+                if (clientData && data.to && data.message) {
+                    const fromUsername = database_1.dbService.resolveUsername(clientData.username);
+                    const toUsername = database_1.dbService.resolveUsername(data.to);
+                    // Save message to database
+                    const savedMessage = database_1.dbService.saveMessage(fromUsername, toUsername, data.message);
+                    console.log(`Chat: ${fromUsername} -> ${toUsername}: ${data.message.substring(0, 50)}...`);
+                    // Send confirmation back to sender
+                    ws.send(JSON.stringify({
+                        type: 'chatMessageSent',
+                        message: savedMessage
+                    }));
+                    // Route to recipient if online
+                    for (const [recipientWs, recipientData] of clients.entries()) {
+                        const resolvedRecipient = database_1.dbService.resolveUsername(recipientData.username);
+                        if (resolvedRecipient === toUsername && recipientWs.readyState === ws_1.WebSocket.OPEN) {
+                            recipientWs.send(JSON.stringify({
+                                type: 'chatMessageReceived',
+                                message: savedMessage
+                            }));
+                        }
+                    }
+                }
+            }
+            else if (data.type === 'getChatHistory') {
+                if (clientData && data.with) {
+                    const myUsername = database_1.dbService.resolveUsername(clientData.username);
+                    const theirUsername = database_1.dbService.resolveUsername(data.with);
+                    const messages = database_1.dbService.getConversationHistory(myUsername, theirUsername, data.limit || 50);
+                    ws.send(JSON.stringify({
+                        type: 'chatHistory',
+                        with: data.with,
+                        messages
+                    }));
+                    // Mark messages from them as read
+                    database_1.dbService.markMessagesAsRead(theirUsername, myUsername);
+                }
+            }
+            else if (data.type === 'markChatRead') {
+                if (clientData && data.from) {
+                    const myUsername = database_1.dbService.resolveUsername(clientData.username);
+                    const fromUsername = database_1.dbService.resolveUsername(data.from);
+                    database_1.dbService.markMessagesAsRead(fromUsername, myUsername);
+                    ws.send(JSON.stringify({
+                        type: 'chatMarkedRead',
+                        from: data.from
+                    }));
+                }
+            }
         }
         catch (e) {
             console.error('Error parsing message', e);
