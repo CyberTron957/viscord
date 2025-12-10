@@ -1,6 +1,6 @@
 import { WebSocketServer, WebSocket } from 'ws';
 import { Octokit } from '@octokit/rest';
-import { dbService, UserPreferences, UserRecord } from './database';
+import { dbService, UserPreferences, UserRecord, ChatMessage } from './database';
 import { rateLimiter } from './rateLimiter';
 import { redisService, SessionData } from './redisService';
 import http from 'http';
@@ -92,6 +92,35 @@ function canUserSee(viewerGithubId: number | undefined, targetClientData: Client
         default:
             return true;
     }
+}
+
+// Check if two users can chat with each other
+// Allowed: mutual GitHub followers OR connected via invite code
+function canUsersChat(senderUsername: string, senderGithubId: number | undefined,
+    senderFollowers: number[], senderFollowing: number[],
+    recipientUsername: string, recipientGithubId: number | undefined,
+    recipientFollowers: number[], recipientFollowing: number[]): boolean {
+
+    // Check manual connection (invite code) - works for both GitHub and guest users
+    const resolvedSender = dbService.resolveUsername(senderUsername);
+    const resolvedRecipient = dbService.resolveUsername(recipientUsername);
+
+    if (dbService.isManuallyConnected(resolvedSender, resolvedRecipient) ||
+        dbService.isManuallyConnected(senderUsername, recipientUsername)) {
+        return true; // Connected via invite code
+    }
+
+    // Check mutual GitHub follow (both must follow each other)
+    if (senderGithubId && recipientGithubId) {
+        const senderFollowsRecipient = senderFollowing.includes(recipientGithubId);
+        const recipientFollowsSender = recipientFollowers.includes(senderGithubId);
+
+        if (senderFollowsRecipient && recipientFollowsSender) {
+            return true; // Mutual followers
+        }
+    }
+
+    return false; // No valid relationship
 }
 
 function filterUserData(clientData: ClientData): any {
@@ -440,6 +469,103 @@ wss.on('connection', (ws, req) => {
 
                     // Broadcast update to refresh user lists
                     scheduleBroadcast();
+                }
+            }
+            // --- Chat Messages ---
+            else if (data.type === 'sendChatMessage') {
+                if (clientData && data.to && data.message) {
+                    // Rate limit chat messages (30 per minute)
+                    if (!rateLimiter.checkChatLimit(clientData.username)) {
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            message: 'Chat rate limit exceeded. Please slow down.'
+                        }));
+                        return;
+                    }
+
+                    // Validate message length
+                    const message = String(data.message).substring(0, 500);
+                    if (message.trim().length === 0) {
+                        return; // Ignore empty messages
+                    }
+
+                    const fromUsername = dbService.resolveUsername(clientData.username);
+                    const toUsername = dbService.resolveUsername(data.to);
+
+                    // Find recipient's data to check relationship
+                    let recipientData: ClientData | undefined;
+                    for (const [_, rd] of clients.entries()) {
+                        if (dbService.resolveUsername(rd.username) === toUsername) {
+                            recipientData = rd;
+                            break;
+                        }
+                    }
+
+                    // Validate relationship: must be mutual followers OR connected via invite
+                    const canChat = recipientData ? canUsersChat(
+                        clientData.username, clientData.githubId,
+                        clientData.followers, clientData.following,
+                        recipientData.username, recipientData.githubId,
+                        recipientData.followers, recipientData.following
+                    ) : dbService.isManuallyConnected(fromUsername, toUsername);
+
+                    if (!canChat) {
+                        ws.send(JSON.stringify({
+                            type: 'error',
+                            message: 'You can only chat with mutual followers or invite-connected users.'
+                        }));
+                        return;
+                    }
+
+                    // Save message to database
+                    const savedMessage = dbService.saveMessage(fromUsername, toUsername, message);
+                    console.log(`Chat: ${fromUsername} -> ${toUsername}: ${message.substring(0, 50)}...`);
+
+                    // Send confirmation back to sender
+                    ws.send(JSON.stringify({
+                        type: 'chatMessageSent',
+                        message: savedMessage
+                    }));
+
+                    // Route to recipient if online (optimized: break after finding)
+                    for (const [recipientWs, rd] of clients.entries()) {
+                        const resolvedRecipient = dbService.resolveUsername(rd.username);
+                        if (resolvedRecipient === toUsername && recipientWs.readyState === WebSocket.OPEN) {
+                            recipientWs.send(JSON.stringify({
+                                type: 'chatMessageReceived',
+                                message: savedMessage
+                            }));
+                            // Don't break - user might have multiple windows open
+                        }
+                    }
+                }
+            } else if (data.type === 'getChatHistory') {
+                if (clientData && data.with) {
+                    const myUsername = dbService.resolveUsername(clientData.username);
+                    const theirUsername = dbService.resolveUsername(data.with);
+
+                    const messages = dbService.getConversationHistory(myUsername, theirUsername, data.limit || 50);
+
+                    ws.send(JSON.stringify({
+                        type: 'chatHistory',
+                        with: data.with,
+                        messages
+                    }));
+
+                    // Mark messages from them as read
+                    dbService.markMessagesAsRead(theirUsername, myUsername);
+                }
+            } else if (data.type === 'markChatRead') {
+                if (clientData && data.from) {
+                    const myUsername = dbService.resolveUsername(clientData.username);
+                    const fromUsername = dbService.resolveUsername(data.from);
+
+                    dbService.markMessagesAsRead(fromUsername, myUsername);
+
+                    ws.send(JSON.stringify({
+                        type: 'chatMarkedRead',
+                        from: data.from
+                    }));
                 }
             }
         } catch (e) {

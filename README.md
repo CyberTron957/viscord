@@ -17,10 +17,10 @@ A VS Code extension that shows your GitHub friends' real-time coding status! See
 
 ### Installation
 
-####From Marketplace (Coming Soon)
+####From Marketplace
 1. Open VS Code
 2. Go to Extensions (`Cmd+Shift+X` or `Ctrl+Shift+X`)
-3. Search for "VS Code viscord"
+3. Search for "Viscord"
 4. Click Install
 
 #### From Source

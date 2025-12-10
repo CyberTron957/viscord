@@ -125,6 +125,21 @@
         "command": "vscode-viscord.clearCache",
         "title": "Clear Cache",
         "icon": "$(clear-all)"
+      },
+      {
+        "command": "vscode-viscord.openChat",
+        "title": "Open Chat",
+        "icon": "$(comment)"
+      },
+      {
+        "command": "vscode-viscord.sendChatMessage",
+        "title": "Send Message",
+        "icon": "$(pencil)"
+      },
+      {
+        "command": "vscode-viscord.closeChat",
+        "title": "Close Chat",
+        "icon": "$(close)"
       }
     ],
     "menus": {
@@ -170,6 +185,11 @@
           "command": "vscode-viscord.removeConnection",
           "when": "view == viscord-friends && viewItem == user-manual",
           "group": "manage"
+        },
+        {
+          "command": "vscode-viscord.openChat",
+          "when": "(view == viscord-friends || view == viscord-github) && (viewItem == user || viewItem == user-manual)",
+          "group": "inline"
         }
       ]
     },
@@ -198,6 +218,12 @@
           "id": "viscord-status",
           "name": "Connection Status",
           "icon": "$(pulse)"
+        },
+        {
+          "id": "viscord-chat",
+          "name": "Chat",
+          "type": "webview",
+          "icon": "$(comment-discussion)"
         }
       ],
       "explorer": [
